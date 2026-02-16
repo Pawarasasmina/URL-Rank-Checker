@@ -1,65 +1,31 @@
 const axios = require('axios');
-const { buildDomainKeys, getRootDomain, tokenizeValue } = require('../utils/domain');
+const { extractHostFromLink, getRootDomain, tokenizeValue } = require('../utils/domain');
 
 const SERP_URL = 'https://serpapi.com/search.json';
 
-const uniqueById = (list) =>
-  list.filter(
-    (item, index, arr) =>
-      arr.findIndex((x) => String(x._id) === String(item._id)) === index
-  );
-
-const enrichDomainRecord = (domainDoc) => {
-  const plain = typeof domainDoc.toObject === 'function' ? domainDoc.toObject() : { ...domainDoc };
-  const brandCode = plain.brand?.code || '';
-  const generated = buildDomainKeys({ domain: plain.domain, brandCode });
-
-  const domainHostKey = plain.domainHostKey || generated.domainHostKey;
-  const domainRootKey = plain.domainRootKey || generated.domainRootKey || getRootDomain(domainHostKey);
-  const tokens = [...new Set([...(plain.tokens || []), ...generated.tokens])].filter((token) => token.length >= 4);
-
-  const isAliasTokenDomain = !domainHostKey.includes('.') || domainHostKey.length < 10;
-
-  return {
-    ...plain,
-    domainHostKey,
-    domainRootKey,
-    tokens,
-    isAliasTokenDomain,
-  };
-};
-
 const buildLookup = (domains) => {
-  const sanitized = (domains || [])
-    .map(enrichDomainRecord)
-    .filter((item) => item.domainHostKey && item.brand);
-
   const mapExactHostKey = new Map();
   const mapRootKey = new Map();
   const tokenIndex = new Map();
 
-  const listDomainsSortedByLengthDesc = [...sanitized].sort(
+  const listDomainsSortedByLengthDesc = [...domains].sort(
     (a, b) => b.domainHostKey.length - a.domainHostKey.length
   );
 
-  sanitized.forEach((item) => {
+  domains.forEach((item) => {
     mapExactHostKey.set(item.domainHostKey, item);
 
-    if (item.domainRootKey) {
-      if (!mapRootKey.has(item.domainRootKey)) {
-        mapRootKey.set(item.domainRootKey, []);
-      }
-      mapRootKey.get(item.domainRootKey).push(item);
+    if (!mapRootKey.has(item.domainRootKey)) {
+      mapRootKey.set(item.domainRootKey, []);
     }
+    mapRootKey.get(item.domainRootKey).push(item);
 
-    if (item.isAliasTokenDomain) {
-      (item.tokens || []).forEach((token) => {
-        if (!tokenIndex.has(token)) {
-          tokenIndex.set(token, new Set());
-        }
-        tokenIndex.get(token).add(item.domainHostKey);
-      });
-    }
+    (item.tokens || []).forEach((token) => {
+      if (!tokenIndex.has(token)) {
+        tokenIndex.set(token, new Set());
+      }
+      tokenIndex.get(token).add(item.domainHostKey);
+    });
   });
 
   return {
@@ -95,14 +61,20 @@ const classifyResult = (resultHost, resultLink, lookup) => {
   const rootCandidates = lookup.mapRootKey.get(getRootDomain(resultHost)) || [];
   suffixCandidates.push(...rootCandidates);
 
-  const suffix = resolveBestMatch(uniqueById(suffixCandidates));
+  const suffix = resolveBestMatch(
+    suffixCandidates.filter((item, index, arr) => arr.findIndex((x) => x._id.toString() === item._id.toString()) === index)
+  );
+
   if (suffix) {
     return { matchedDomain: suffix, matchType: 'suffix' };
   }
 
-  const hostTokens = new Set(tokenizeValue(resultHost));
-  const tokenCandidates = [];
+  const hostTokens = new Set([
+    ...tokenizeValue(resultHost),
+    ...tokenizeValue(resultLink),
+  ]);
 
+  const tokenCandidates = [];
   hostTokens.forEach((token) => {
     if (token.length < 4) return;
     const hostSet = lookup.tokenIndex.get(token);
@@ -110,11 +82,16 @@ const classifyResult = (resultHost, resultLink, lookup) => {
 
     hostSet.forEach((hostKey) => {
       const candidate = lookup.mapExactHostKey.get(hostKey);
-      if (candidate) tokenCandidates.push(candidate);
+      if (candidate) {
+        tokenCandidates.push(candidate);
+      }
     });
   });
 
-  const tokenMatch = resolveBestMatch(uniqueById(tokenCandidates));
+  const tokenMatch = resolveBestMatch(
+    tokenCandidates.filter((item, index, arr) => arr.findIndex((x) => x._id.toString() === item._id.toString()) === index)
+  );
+
   if (tokenMatch) {
     return { matchedDomain: tokenMatch, matchType: 'token' };
   }
@@ -142,5 +119,4 @@ module.exports = {
   fetchSerpResults,
   buildLookup,
   classifyResult,
-  enrichDomainRecord,
 };

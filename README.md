@@ -69,23 +69,6 @@ serp-brand-dashboard/
 - Frontend: http://localhost:5173
 - Backend: http://localhost:4000
 
-
-## Import Exact MongoDB Documents
-
-If you want to use the exact MongoDB Extended JSON documents provided in this repo:
-
-- `server/data/brands.mongo.json`
-- `server/data/domains.mongo.json`
-
-Import using `mongoimport`:
-
-```bash
-mongoimport --uri "$MONGO_URI" --collection brands --jsonArray --file server/data/brands.mongo.json
-mongoimport --uri "$MONGO_URI" --collection domains --jsonArray --file server/data/domains.mongo.json
-```
-
-These files preserve `_id`, references, timestamps, and metadata (`createdBy`, `updatedBy`, `nawala`, etc.).
-
 ## API Endpoints
 
 - `GET /api/brands?active=true`
