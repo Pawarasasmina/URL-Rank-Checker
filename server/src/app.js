@@ -16,7 +16,13 @@ const createApp = ({ serpController, jwtSecret, jwtExpiresIn }) => {
   const authMiddleware = createAuthMiddleware({ jwtSecret });
   const authController = createAuthController({ jwtSecret, jwtExpiresIn });
 
-  app.use(cors());
+  app.use(cors({
+    origin: [
+      'https://url-rank-checker.vercel.app/', // Replace with your actual Vercel domain
+      'http://localhost:5173', // Local dev
+    ],
+    credentials: true,
+  }));
   app.use(express.json());
 
   app.get('/api/health', (req, res) => {
