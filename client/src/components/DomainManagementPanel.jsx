@@ -19,7 +19,7 @@ const formatBrandLabel = (brand) => {
   return `${code} - ${name}`;
 };
 
-function DomainManagementPanel({ brands, onLoadDomains, onCreateDomain, onDeleteDomain }) {
+function DomainManagementPanel({ brands, onLoadDomains, onCreateDomain, onBulkCreateDomains, onDeleteDomain }) {
   const [brandId, setBrandId] = useState('');
   const [domain, setDomain] = useState('');
   const [note, setNote] = useState('');
@@ -28,12 +28,23 @@ function DomainManagementPanel({ brands, onLoadDomains, onCreateDomain, onDelete
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
   const [search, setSearch] = useState('');
+  const [bulkBrandId, setBulkBrandId] = useState('');
+  const [bulkFileName, setBulkFileName] = useState('');
+  const [bulkCsv, setBulkCsv] = useState('');
+  const [bulkSubmitting, setBulkSubmitting] = useState(false);
+  const [bulkResult, setBulkResult] = useState(null);
 
   useEffect(() => {
     if (!brandId && brands.length > 0) {
       setBrandId(brands[0]._id);
     }
   }, [brands, brandId]);
+
+  useEffect(() => {
+    if (!bulkBrandId && brands.length > 0) {
+      setBulkBrandId(brands[0]._id);
+    }
+  }, [brands, bulkBrandId]);
 
   const brandMap = useMemo(() => {
     return new Map(brands.map((item) => [item._id, item]));
@@ -80,6 +91,40 @@ function DomainManagementPanel({ brands, onLoadDomains, onCreateDomain, onDelete
       setError(err.message || 'Failed to add domain');
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const handleBulkFile = async (file) => {
+    setBulkResult(null);
+    setError('');
+    if (!file) return;
+    setBulkFileName(file.name || 'domains.csv');
+
+    const text = await file.text();
+    setBulkCsv(text || '');
+  };
+
+  const runBulkAdd = async () => {
+    if (!onBulkCreateDomains) {
+      setError('Bulk import is not available.');
+      return;
+    }
+    if (!bulkCsv.trim()) {
+      setError('Please choose a CSV file first.');
+      return;
+    }
+
+    setBulkSubmitting(true);
+    setError('');
+    setBulkResult(null);
+    try {
+      const result = await onBulkCreateDomains({ csv: bulkCsv, defaultBrandId: bulkBrandId });
+      setBulkResult(result);
+      await loadDomains();
+    } catch (err) {
+      setError(err.message || 'Bulk import failed');
+    } finally {
+      setBulkSubmitting(false);
     }
   };
 
@@ -144,6 +189,7 @@ function DomainManagementPanel({ brands, onLoadDomains, onCreateDomain, onDelete
           {error && <p className="mt-3 rounded bg-red-50 p-2 text-sm text-red-700">{error}</p>}
         </div>
 
+       
         <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
           <div className="mb-3 flex items-center justify-between">
             <h3 className="text-base font-semibold">Domains</h3>
