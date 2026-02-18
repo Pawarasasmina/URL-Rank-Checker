@@ -10,25 +10,20 @@ const domainSchema = new mongoose.Schema(
     domainHostKey: { type: String, required: true, index: true },
     domainRootKey: { type: String, required: true, index: true },
     tokens: [{ type: String, index: true }],
-    uptime: {
-      status: { type: String, default: 'unknown' },
-    },
-    nawala: {
-      status: { type: String, default: 'unknown' },
-      blockedId: { type: String, default: null },
-      lastChecked: { type: Date },
-    },
-    cloudflare: {
-      status: { type: String, default: 'unknown' },
-    },
-    google: {
-      status: { type: String, default: 'unknown' },
-    },
     createdBy: { type: mongoose.Schema.Types.ObjectId },
     updatedBy: { type: mongoose.Schema.Types.ObjectId },
   },
   {
     timestamps: true,
+    toJSON: {
+      transform: (doc, ret) => {
+        delete ret.uptime;
+        delete ret.nawala;
+        delete ret.cloudflare;
+        delete ret.google;
+        return ret;
+      },
+    },
   }
 );
 
