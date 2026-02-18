@@ -21,8 +21,14 @@ export const setAuthToken = (token) => {
 
 export const getAuthToken = () => authToken;
 
+const API_BASE_URL =
+  typeof window !== 'undefined' && window.location.hostname === 'localhost'
+    ? ''
+    : 'https://url-rank-checker.onrender.com';
+
 const request = async (path, options = {}) => {
-  const res = await fetch(path, {
+  const url = API_BASE_URL ? `${API_BASE_URL}${path}` : path;
+  const res = await fetch(url, {
     headers: {
       'Content-Type': 'application/json',
       ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
