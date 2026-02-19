@@ -1,10 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
+import AnalyticsPanel from './AnalyticsPanel';
 
 const toExternalUrl = (domain) => {
   if (!domain) return '#';
-  if (domain.startsWith('http://') || domain.startsWith('https://')) {
-    return domain;
-  }
+  if (domain.startsWith('http://') || domain.startsWith('https://')) return domain;
   return `https://${domain}`;
 };
 
@@ -23,8 +22,6 @@ function DomainManagementPanel({ brands, onLoadDomains, onCreateDomain, onBulkCr
   const [brandId, setBrandId] = useState('');
   const [domain, setDomain] = useState('');
   const [note, setNote] = useState('');
-  const [domains, setDomains] = useState([]);
-  const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
   const [search, setSearch] = useState('');
@@ -34,11 +31,21 @@ function DomainManagementPanel({ brands, onLoadDomains, onCreateDomain, onBulkCr
   const [bulkSubmitting, setBulkSubmitting] = useState(false);
   const [bulkResult, setBulkResult] = useState(null);
 
-  useEffect(() => {
-    if (!brandId && brands.length > 0) {
-      setBrandId(brands[0]._id);
+  const submit = async (e) => {
+    e.preventDefault();
+    setSubmitting(true);
+    setError('');
+    try {
+      await onCreateDomain({ domain, brandId: selectedBrand._id, note });
+      setDomain('');
+      setNote('');
+      await onRefresh();
+    } catch (err) {
+      setError(err.message || 'Failed to add domain');
+    } finally {
+      setSubmitting(false);
     }
-  }, [brands, brandId]);
+  };
 
   useEffect(() => {
     if (!bulkBrandId && brands.length > 0) {
@@ -50,16 +57,122 @@ function DomainManagementPanel({ brands, onLoadDomains, onCreateDomain, onBulkCr
     return new Map(brands.map((item) => [item._id, item]));
   }, [brands]);
 
-  const filteredDomains = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    if (!q) return domains;
+// ─── Domain card ──────────────────────────────────────────────────────────────
+function DomainCard({ item, isSelected, onSelect, onDelete }) {
+  return (
+    <div
+      className={`cursor-pointer rounded-lg border p-3 transition ${isSelected
+        ? 'border-indigo-500 bg-indigo-50 shadow-sm'
+        : 'border-slate-200 bg-white hover:bg-slate-50'
+        }`}
+      onClick={() => onSelect(item)}
+    >
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0">
+          <a
+            href={toExternalUrl(item.domain)}
+            target="_blank"
+            rel="noreferrer"
+            className="block truncate font-medium text-indigo-700 hover:underline"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {item.domain}
+          </a>
+          {item.note && (
+            <p className="mt-0.5 truncate text-xs text-slate-500">{item.note}</p>
+          )}
+          <p className="mt-1 text-xs text-slate-400">
+            {item.createdAt ? new Date(item.createdAt).toLocaleDateString() : ''}
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            onDelete(item._id);
+          }}
+          className="shrink-0 rounded bg-red-100 px-2 py-1 text-xs font-medium text-red-700 hover:bg-red-200"
+        >
+          Delete
+        </button>
+      </div>
+    </div>
+  );
+}
 
-    return domains.filter((item) => {
-      const brand = item.brand || brandMap.get(item.brand);
-      const brandText = `${brand?.code || ''} ${brand?.name || ''}`.toLowerCase();
-      return item.domain?.toLowerCase().includes(q) || brandText.includes(q);
-    });
-  }, [domains, search, brandMap]);
+// ─── Analytics panel wrapper (brand-level or domain-level) ───────────────────
+function AnalyticsInline({ brand, domainItem, onGetRankingHistory }) {
+  const [range, setRange] = useState('7d');
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    if (!brand?._id) return;
+    let cancelled = false;
+    const load = async () => {
+      setLoading(true);
+      setError('');
+      try {
+        const result = await onGetRankingHistory(brand._id, range);
+        if (!cancelled) setData(result);
+      } catch (err) {
+        if (!cancelled) setError(err.message || 'Failed to load analytics');
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    };
+    load();
+    return () => { cancelled = true; };
+  }, [brand?._id, range]);
+
+  // If a specific domain is focused, filter domainTrends to that domain only
+  const displayData = useMemo(() => {
+    if (!data) return null;
+    if (!domainItem) return data; // brand-level: show all domains
+    const domainHost = domainItem.domain;
+    const filteredTrends = (data.domainTrends || []).filter(
+      (t) => t.domain === domainHost || t.domainHostKey?.includes(domainHost)
+    );
+    return { ...data, domainTrends: filteredTrends };
+  }, [data, domainItem]);
+
+  return (
+    <AnalyticsPanel
+      selectedBrand={brand}
+      data={displayData}
+      range={range}
+      onRangeChange={setRange}
+      loading={loading}
+      error={error}
+      focusedDomain={domainItem?.domain || null}
+    />
+  );
+}
+
+// ─── Main panel ───────────────────────────────────────────────────────────────
+function DomainManagementPanel({
+  brands,
+  selectedBrand,
+  isAdmin,
+  onLoadDomains,
+  onCreateDomain,
+  onDeleteDomain,
+  onGetRankingHistory,
+}) {
+  const [domains, setDomains] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [search, setSearch] = useState('');
+
+  // null = no analytics; 'brand' = brand-level; domain object = domain-level
+  const [analyticsTarget, setAnalyticsTarget] = useState(null);
+
+  // Clear selections when brand changes
+  useEffect(() => {
+    setAnalyticsTarget(isAdmin ? 'brand' : null);
+    setSearch('');
+  }, [selectedBrand?._id]);
 
   const loadDomains = async () => {
     setLoading(true);
@@ -130,64 +243,70 @@ function DomainManagementPanel({ brands, onLoadDomains, onCreateDomain, onBulkCr
 
   const remove = async (id) => {
     const target = domains.find((item) => item._id === id);
-    const confirmed = window.confirm(
-      `Delete domain "${target?.domain || ''}"? This action cannot be undone.`
-    );
-    if (!confirmed) return;
-
-    setError('');
+    if (!window.confirm(`Delete domain "${target?.domain || ''}"? This cannot be undone.`)) return;
     try {
       await onDeleteDomain(id);
+      if (analyticsTarget && analyticsTarget !== 'brand' && analyticsTarget._id === id) {
+        setAnalyticsTarget(null);
+      }
       await loadDomains();
     } catch (err) {
       setError(err.message || 'Failed to delete domain');
     }
   };
 
+  const brandDomains = useMemo(() => {
+    if (!selectedBrand) return [];
+    const q = search.trim().toLowerCase();
+    return domains.filter((d) => {
+      const brandId = typeof d.brand === 'object' ? d.brand?._id : d.brand;
+      if (brandId !== selectedBrand._id) return false;
+      if (!q) return true;
+      return d.domain?.toLowerCase().includes(q) || (d.note || '').toLowerCase().includes(q);
+    });
+  }, [domains, selectedBrand, search]);
+
+  const handleBrandHeaderClick = () => {
+    if (!isAdmin) return;
+    // Toggle brand analytics — clicking again closes it
+    setAnalyticsTarget((prev) => (prev === 'brand' ? null : 'brand'));
+  };
+
+  const handleDomainSelect = (domainItem) => {
+    if (!isAdmin) return;
+    setAnalyticsTarget((prev) =>
+      prev !== 'brand' && prev?._id === domainItem._id ? null : domainItem
+    );
+  };
+
+  // Determine what to show in the analytics panel
+  const analyticsIsBrand = analyticsTarget === 'brand';
+  const analyticsIsDomain = analyticsTarget && analyticsTarget !== 'brand';
+  const showAnalytics = isAdmin && (analyticsIsBrand || analyticsIsDomain);
+
+  const analyticsLabel = analyticsIsBrand
+    ? `${selectedBrand?.code} `
+    : analyticsIsDomain
+      ? analyticsTarget.domain
+      : '';
+
   return (
-    <section className="p-3 lg:p-5">
-      <div className="space-y-4">
-        <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
-          <h2 className="text-lg font-semibold">Domain Management</h2>
-          <p className="mt-1 text-xs text-slate-500">Add domain with brand and note.</p>
+    <section className="p-3 lg:p-5 space-y-4">
+      {/* Add domain form — admin only */}
+      {isAdmin && (
+   <AddDomainForm
+  selectedBrand={selectedBrand}
+  onCreateDomain={onCreateDomain}
+  onRefresh={loadDomains}
+/>
+      )}
 
-          <form onSubmit={submit} className="mt-4 grid gap-3 lg:grid-cols-[220px_1fr_1fr_auto]">
-            <select
-              value={brandId}
-              onChange={(e) => setBrandId(e.target.value)}
-              className="rounded-md border border-slate-300 px-3 py-2 text-sm"
-              required
-            >
-              {brands.map((item) => (
-                <option key={item._id} value={item._id}>
-                  {formatBrandLabel(item)}
-                </option>
-              ))}
-            </select>
-            <input
-              value={domain}
-              onChange={(e) => setDomain(e.target.value)}
-              placeholder="example.com"
-              className="rounded-md border border-slate-300 px-3 py-2 text-sm"
-              required
-            />
-            <input
-              value={note}
-              onChange={(e) => setNote(e.target.value)}
-              placeholder="Note"
-              className="rounded-md border border-slate-300 px-3 py-2 text-sm"
-            />
-            <button
-              type="submit"
-              disabled={submitting}
-              className="rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              {submitting ? 'Adding...' : 'Add Domain'}
-            </button>
-          </form>
+      {error && <p className="rounded bg-red-50 p-2 text-sm text-red-700">{error}</p>}
 
-          {error && <p className="mt-3 rounded bg-red-50 p-2 text-sm text-red-700">{error}</p>}
-        </div>
+      {selectedBrand ? (
+        <div className="space-y-4">
+          {/* Two-column layout: domains list | analytics */}
+          <div className="flex gap-4 min-h-[70vh]">
 
        
         <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
@@ -197,72 +316,102 @@ function DomainManagementPanel({ brands, onLoadDomains, onCreateDomain, onBulkCr
               <input
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                placeholder="Search domain or brand..."
-                className="w-64 rounded-md border border-slate-300 px-3 py-1.5 text-sm"
+                placeholder="Search domains..."
+                className="mb-2 w-full rounded-md border border-slate-300 px-3 py-1.5 text-sm focus:border-indigo-500 focus:outline-none"
               />
               <button
                 type="button"
                 onClick={loadDomains}
                 disabled={loading}
-                className="rounded bg-slate-100 px-2 py-1 text-xs font-medium text-slate-700 hover:bg-slate-200"
+                className="mb-3 w-full rounded bg-slate-100 py-1 text-xs font-medium text-slate-600 hover:bg-slate-200"
               >
-                {loading ? 'Loading...' : 'Refresh'}
+                {loading ? 'Loading…' : 'Refresh'}
               </button>
-            </div>
-          </div>
 
-          <div className="overflow-auto rounded-md border border-slate-100">
-            <table className="min-w-full divide-y divide-slate-200 text-sm">
-              <thead>
-                <tr className="bg-slate-50">
-                  <th className="px-3 py-2 text-left">Domain</th>
-                  <th className="px-3 py-2 text-left">Brand</th>
-                  <th className="px-3 py-2 text-left">Note</th>
-                  <th className="px-3 py-2 text-left">Created</th>
-                  <th className="px-3 py-2 text-left">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {filteredDomains.map((item) => {
-                  const brand = item.brand || brandMap.get(item.brand);
-                  return (
-                    <tr key={item._id}>
-                      <td className="px-3 py-2 font-medium">
-                        <a
-                          href={toExternalUrl(item.domain)}
+              {brandDomains.length === 0 ? (
+                <p className="rounded-md border border-dashed border-slate-300 p-3 text-sm text-slate-500">
+                  {loading ? 'Loading…' : 'No domains yet.'}
+                </p>
+              ) : (
+                <div className="space-y-1 overflow-y-auto max-h-[calc(100vh-320px)]">
+                  {brandDomains.map((item) => {
+                    const isSelected = analyticsIsDomain && analyticsTarget?._id === item._id;
+                    return (
+                      <div
+                        key={item._id}
+                        onClick={() => handleDomainSelect(item)}
+                        className={`flex cursor-pointer items-center gap-2 rounded-md border px-3 py-2 transition ${isSelected
+                          ? 'border-indigo-500 bg-indigo-50'
+                          : 'border-slate-200 bg-white hover:bg-slate-50'
+                          }`}
+                      >
+                        <span className="h-2 w-2 shrink-0 rounded-full bg-indigo-400" />
+
+                        <a href={toExternalUrl(item.domain)}
                           target="_blank"
                           rel="noreferrer"
-                          className="text-indigo-700 hover:underline"
+                          className="truncate text-sm font-medium text-indigo-700 hover:underline"
+                          onClick={(e) => e.stopPropagation()}
                         >
                           {item.domain}
                         </a>
-                      </td>
-                      <td className="px-3 py-2">{formatBrandLabel(brand)}</td>
-                      <td className="px-3 py-2">{item.note || '-'}</td>
-                      <td className="px-3 py-2 text-xs text-slate-500">
-                        {item.createdAt ? new Date(item.createdAt).toLocaleString() : '-'}
-                      </td>
-                      <td className="px-3 py-2">
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            {/* ── Analytics panel ── */}
+            <div className="flex-1 min-w-0">
+              {showAnalytics ? (
+                <div className="rounded-lg border border-indigo-200 bg-white shadow-sm overflow-hidden h-full">
+                  <div className="flex items-center gap-2 border-b border-indigo-100 bg-indigo-50 px-4 py-3">
+                    <div className="flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 shadow-sm">
+                      <span className="text-xs font-semibold uppercase tracking-wider text-indigo-200">
+                        {analyticsIsBrand ? 'Brand Analytics' : 'Domain Analytics'}
+                      </span>
+                      <span className="h-4 w-px bg-indigo-400" />
+                      <span className="text-base font-bold text-white">{analyticsLabel}</span>
+                    </div>
+                    <div className="ml-auto flex items-center gap-2">
+                      {analyticsIsDomain && (
                         <button
                           type="button"
-                          onClick={() => remove(item._id)}
-                          className="rounded bg-red-100 px-2 py-1 text-xs font-medium text-red-700 hover:bg-red-200"
+                          onClick={() => remove(analyticsTarget._id)}
+                          className="rounded bg-red-100 px-2 py-0.5 text-xs font-medium text-red-700 hover:bg-red-200"
                         >
-                          Delete
+                          Delete Domain
                         </button>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => setAnalyticsTarget(null)}
+                        className="rounded bg-indigo-100 px-2 py-0.5 text-xs text-indigo-700 hover:bg-indigo-200"
+                      >
+                        Close
+                      </button>
+                    </div>
+                  </div>
+                  <AnalyticsInline
+                    brand={selectedBrand}
+                    domainItem={analyticsIsDomain ? analyticsTarget : null}
+                    onGetRankingHistory={onGetRankingHistory}
+                  />
+                </div>
+              ) : (
+                <div className="flex h-full items-center justify-center rounded-lg border border-dashed border-slate-300 bg-white text-sm text-slate-500">
+                  Select a domain or click the brand name to view analytics.
+                </div>
+              )}
+            </div>
           </div>
-
-          {!loading && filteredDomains.length === 0 && (
-            <p className="mt-3 text-xs text-slate-500">No domains found for this search.</p>
-          )}
         </div>
-      </div>
+      ) : (
+        <div className="flex items-center justify-center h-40 rounded-lg border border-dashed border-slate-300 bg-white text-sm text-slate-500">
+          Select a brand from the sidebar to view its domains.
+        </div>
+      )}
     </section>
   );
 }
