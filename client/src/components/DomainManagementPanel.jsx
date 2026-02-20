@@ -268,7 +268,7 @@ function DomainManagementPanel({
                 onClick={handleBrandCompare}
                 className={`rounded-md px-3 py-1.5 text-sm font-semibold transition ${
                   compareMode === 'brand'
-                    ? 'bg-black text-white shadow-sm'
+                    ? 'bg-black text-amber-100 shadow-sm'
                     : 'bg-slate-100 text-slate-700 hover:bg-indigo-600 hover:text-white'
                 }`}
                 title="Compare brands"

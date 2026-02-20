@@ -9,6 +9,7 @@ import ProfilePanel from './components/ProfilePanel';
 import UserManagementPanel from './components/UserManagementPanel';
 import DomainManagementPanel from './components/DomainManagementPanel';
 import DomainActivityLogPanel from './components/DomainActivityLogPanel';
+import UserDashboard from './components/UserDashboard';
 import {
   addAdminApiKey,
   checkTopTen,
@@ -35,11 +36,11 @@ import {
 } from './services/api';
 
 function App() {
-  const socketUrl = import.meta.env.VITE_SOCKET_URL || 'https://url-rank-checker.onrender.com';
+  const socketUrl = import.meta.env.VITE_SOCKET_URL || (window.location.hostname === 'localhost' ? 'http://localhost:4000' : 'https://url-rank-checker.onrender.com');;
 
   const [authReady, setAuthReady] = useState(false);
   const [currentUser, setCurrentUser] = useState(null);
-  const [tab, setTab] = useState('checker');
+  const [tab, setTab] = useState('dashboard');
 
   const [brands, setBrands] = useState([]);
   const [selectedBrand, setSelectedBrand] = useState(null);
@@ -52,6 +53,10 @@ function App() {
   const [adminError, setAdminError] = useState('');
   const [autoRunActionLoading, setAutoRunActionLoading] = useState(false);
 
+  // Dashboard enriched brands state
+  const [dashboardBrands, setDashboardBrands] = useState([]);
+  const [totalDomains, setTotalDomains] = useState(0);
+
   useEffect(() => {
     const bootstrapAuth = async () => {
       try {
@@ -59,7 +64,6 @@ function App() {
           setAuthReady(true);
           return;
         }
-
         const me = await getMe();
         setCurrentUser(me);
       } catch (err) {
@@ -78,13 +82,15 @@ function App() {
   const tabs = useMemo(() => {
     if (!isAdmin) {
       return [
+        { id: 'dashboard', label: 'Dashboard' },
         { id: 'checker', label: 'Manual Checker' },
-        { id: 'domains', label: 'Brands' },
+        { id: 'domains', label: 'Brands & Analytics' },
         { id: 'profile', label: 'My Profile' },
       ];
     }
 
     return [
+      { id: 'dashboard', label: 'Dashboard' },
       { id: 'checker', label: 'Manual Checker' },
       { id: 'domains', label: 'Brands & Analytics' },
       { id: 'admin', label: 'Admin Config' },
@@ -112,6 +118,37 @@ function App() {
     loadBrands();
   }, [authReady, currentUser]);
 
+  // Load enriched brand data for the dashboard
+  useEffect(() => {
+    if (!brands.length || tab !== 'dashboard') return;
+
+    const loadDashboardBrands = async () => {
+      const domainList = await getDomains();
+      setTotalDomains(domainList.length);
+      const enriched = await Promise.all(
+        brands.map(async (brand) => {
+          try {
+            const history = await getRankingHistory(brand._id, '1d');
+            const points = (history.points || []).filter((p) => p.bestOwnRank !== null);
+            const latest = points[points.length - 1];
+            return {
+              ...brand,
+              currentRank: latest?.bestOwnRank ?? null,
+              delta: history.delta ?? null,
+              trend: history.trend ?? null,
+              lastChecked: latest?.checkedAt ?? null,
+            };
+          } catch {
+            return { ...brand, currentRank: null, delta: null, trend: null, lastChecked: null };
+          }
+        })
+      );
+      setDashboardBrands(enriched);
+    };
+
+    loadDashboardBrands();
+  }, [brands, tab]);
+
   const selectedResult = useMemo(() => {
     if (!selectedBrand) return null;
     return resultsByBrand[selectedBrand._id] || null;
@@ -120,7 +157,7 @@ function App() {
   const handleLogin = async ({ email, password }) => {
     const data = await login({ email, password });
     setCurrentUser(data.user);
-    setTab('checker');
+    setTab('dashboard');
   };
 
   const logout = () => {
@@ -129,7 +166,8 @@ function App() {
     setBrands([]);
     setSelectedBrand(null);
     setResultsByBrand({});
-    setTab('checker');
+    setDashboardBrands([]);
+    setTab('dashboard');
   };
 
   const runCheck = async ({ brandId, query, country, isMobile }) => {
@@ -137,10 +175,7 @@ function App() {
     setError('');
     try {
       const response = await checkTopTen({ brandId, query, country, isMobile });
-      setResultsByBrand((prev) => ({
-        ...prev,
-        [brandId]: response,
-      }));
+      setResultsByBrand((prev) => ({ ...prev, [brandId]: response }));
     } catch (err) {
       setError(err.message || 'Failed to check SERP results');
     } finally {
@@ -172,9 +207,7 @@ function App() {
   useEffect(() => {
     if (!isAdmin || tab !== 'admin') return undefined;
 
-    const socket = io(socketUrl, {
-      transports: ['websocket', 'polling'],
-    });
+    const socket = io(socketUrl, { transports: ['websocket', 'polling'] });
 
     const onDashboardUpdated = () => {
       refreshAdminDashboard({ showLoader: false });
@@ -287,7 +320,9 @@ function App() {
                   key={item.id}
                   type="button"
                   onClick={() => setTab(item.id)}
-                  className={`rounded-md px-3 py-2 text-sm font-semibold ${tab === item.id ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                  className={`rounded-md px-3 py-2 text-sm font-semibold ${tab === item.id
+                      ? 'bg-slate-900 text-white'
+                      : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
                     }`}
                 >
                   {item.label}
@@ -308,6 +343,14 @@ function App() {
             </div>
           </div>
         </header>
+
+        {tab === 'dashboard' && (
+          <UserDashboard
+            username={currentUser.username}
+            brands={dashboardBrands}
+            totalDomains={totalDomains}
+          />
+        )}
 
         {tab === 'checker' && (
           <>
