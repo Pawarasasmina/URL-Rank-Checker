@@ -13,6 +13,8 @@ const DOMAIN_COLORS = [
   '#ec4899', '#14b8a6', '#f97316', '#3b82f6', '#84cc16',
 ];
 
+const MAX_DOMAINS = 10;
+
 const getTrendBadge = (trend, delta) => {
   if (trend === 'up') return { label: `↑ ${delta}`, className: 'bg-emerald-50 text-emerald-700' };
   if (trend === 'down') return { label: `↓ ${Math.abs(delta)}`, className: 'bg-rose-50 text-rose-700' };
@@ -20,17 +22,207 @@ const getTrendBadge = (trend, delta) => {
   return { label: 'No data', className: 'bg-slate-100 text-slate-500' };
 };
 
-const buildPoints = (points, width, height, rankField) => {
-  if (!points.length) return '';
-  return points
-    .map((point, index) => {
-      const rank = point[rankField];
-      const x = points.length > 1 ? (index * width) / (points.length - 1) : width / 2;
-      const y = ((rank - 1) / 10) * height;
-      return `${x},${y}`;
-    })
-    .join(' ');
-};
+// ─── Shared Polyline Chart ────────────────────────────────────────────────────
+// Works for both brand (points use `value`) and domain (points use `rank`).
+// Pass `valueKey` as the field name to read from each point.
+function PolylineChart({ series, height = 280, valueKey = 'rank' }) {
+  const [hovered, setHovered] = useState(null); // { seriesIdx, pointIdx }
+
+  const svgWidth = 900;
+  const paddingLeft  = 44;
+  const paddingRight = 16;
+  const paddingBottom = 52;
+  const paddingTop   = 24;
+  const chartWidth  = svgWidth - paddingLeft - paddingRight;
+  const chartHeight = height - paddingBottom - paddingTop;
+  const minRank = 1;
+  const maxRank = 10;
+
+  // Union of all timestamps, sorted ascending
+  const allTimestamps = useMemo(() => {
+    const set = new Set();
+    series.forEach((s) => s.points.forEach((p) => set.add(p.checkedAt)));
+    return Array.from(set).sort();
+  }, [series]);
+
+  const totalPoints = allTimestamps.length;
+
+  const xForIndex = (i) =>
+    totalPoints <= 1
+      ? paddingLeft + chartWidth / 2
+      : paddingLeft + (i / (totalPoints - 1)) * chartWidth;
+
+  const yForRank = (rank) =>
+    paddingTop + ((rank - minRank) / (maxRank - minRank)) * chartHeight;
+
+  // Per-series Map<checkedAt, rankValue>
+  const seriesLookup = useMemo(() =>
+    series.map((s) => {
+      const map = new Map();
+      s.points.forEach((p) => map.set(p.checkedAt, p[valueKey]));
+      return map;
+    }), [series, valueKey]);
+
+  // Split each series into continuous segments (skip gaps)
+  const polylineSegments = series.map((_, si) => {
+    const lookup = seriesLookup[si];
+    const segments = [];
+    let current = [];
+    allTimestamps.forEach((ts, i) => {
+      const rank = lookup.get(ts);
+      if (rank != null) {
+        current.push(`${xForIndex(i)},${yForRank(rank)}`);
+      } else {
+        if (current.length > 0) { segments.push(current.join(' ')); current = []; }
+      }
+    });
+    if (current.length > 0) segments.push(current.join(' '));
+    return segments;
+  });
+
+  const labelEvery = totalPoints <= 8 ? 1 : totalPoints <= 16 ? 2 : totalPoints <= 32 ? 4 : 6;
+
+  return (
+    <div className="overflow-x-auto">
+      <svg
+        viewBox={`0 0 ${svgWidth} ${height}`}
+        className="w-full min-w-[600px]"
+        style={{ height: height + 8 }}
+        onMouseLeave={() => setHovered(null)}
+      >
+        {/* Grid lines — ranks 1–10 */}
+        {Array.from({ length: 10 }, (_, i) => i + 1).map((rank) => {
+          const y = yForRank(rank);
+          return (
+            <g key={rank}>
+              <line
+                x1={paddingLeft} y1={y}
+                x2={svgWidth - paddingRight} y2={y}
+                stroke={rank === 1 ? '#cbd5e1' : '#e2e8f0'}
+                strokeWidth={rank === 1 ? 1.5 : 1}
+                strokeDasharray={rank === 1 ? undefined : '4,3'}
+              />
+              <text x={paddingLeft - 6} y={y + 4} textAnchor="end" fill="#94a3b8" fontSize="11">
+                #{rank}
+              </text>
+            </g>
+          );
+        })}
+
+        {/* Bottom axis */}
+        <line
+          x1={paddingLeft} y1={paddingTop + chartHeight}
+          x2={svgWidth - paddingRight} y2={paddingTop + chartHeight}
+          stroke="#cbd5e1" strokeWidth="1.5"
+        />
+
+        {/* X-axis time labels */}
+        {allTimestamps.map((ts, i) => {
+          if (i % labelEvery !== 0) return null;
+          const x = xForIndex(i);
+          const label = new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+          return (
+            <text
+              key={ts}
+              x={x}
+              y={paddingTop + chartHeight + 28}
+              textAnchor="end"
+              fill="#94a3b8"
+              fontSize="9"
+              transform={`rotate(-40, ${x}, ${paddingTop + chartHeight + 28})`}
+            >
+              {label}
+            </text>
+          );
+        })}
+
+        {/* Polylines */}
+        {series.map((s, si) => {
+          const isHov = hovered?.seriesIdx === si;
+          const opacity = hovered == null || isHov ? 1 : 0.2;
+          return polylineSegments[si].map((pts, segIdx) => (
+            <polyline
+              key={`line-${si}-${segIdx}`}
+              points={pts}
+              fill="none"
+              stroke={s.color}
+              strokeWidth={isHov ? 3 : 2}
+              strokeLinejoin="round"
+              strokeLinecap="round"
+              opacity={opacity}
+              style={{ transition: 'opacity 0.15s, stroke-width 0.15s' }}
+            />
+          ));
+        })}
+
+        {/* Dots + invisible hit areas + tooltips */}
+        {series.map((s, si) => {
+          const lookup = seriesLookup[si];
+          const isSeriesHov = hovered?.seriesIdx === si;
+          return allTimestamps.map((ts, i) => {
+            const rank = lookup.get(ts);
+            if (rank == null) return null;
+            const cx = xForIndex(i);
+            const cy = yForRank(rank);
+            const isPointHov = isSeriesHov && hovered?.pointIdx === i;
+            const dotOpacity = hovered == null || isSeriesHov ? 1 : 0.2;
+            const tipWidth = 128;
+            const tipX = cx + 10 + tipWidth > svgWidth - paddingRight
+              ? cx - tipWidth - 10
+              : cx + 10;
+
+            return (
+              <g key={`dot-${si}-${i}`}>
+                <circle
+                  cx={cx} cy={cy}
+                  r={isPointHov ? 5.5 : 3}
+                  fill={s.color}
+                  stroke="#fff"
+                  strokeWidth={isPointHov ? 2.5 : 1.5}
+                  opacity={dotOpacity}
+                  style={{ transition: 'r 0.1s, opacity 0.15s' }}
+                />
+                {/* Hit area */}
+                <circle
+                  cx={cx} cy={cy} r={12}
+                  fill="transparent"
+                  style={{ cursor: 'crosshair' }}
+                  onMouseEnter={() => setHovered({ seriesIdx: si, pointIdx: i })}
+                  onMouseLeave={() => setHovered(null)}
+                />
+                {/* Tooltip */}
+                {isPointHov && (
+                  <g>
+                    <rect x={tipX} y={cy - 28} width={tipWidth} height={24} rx="5" fill="#1e293b" opacity="0.92" />
+                    <text
+                      x={tipX + tipWidth / 2} y={cy - 12}
+                      textAnchor="middle" fill="#f8fafc" fontSize="11" fontWeight="600"
+                    >
+                      {s.label} #{rank} · {new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                    </text>
+                  </g>
+                )}
+              </g>
+            );
+          });
+        })}
+      </svg>
+    </div>
+  );
+}
+
+// ─── Legend item (line + dot) ─────────────────────────────────────────────────
+function LegendItem({ color, label }) {
+  return (
+    <div className="flex items-center gap-1.5">
+      <svg width="22" height="10" aria-hidden="true">
+        <line x1="1" y1="5" x2="21" y2="5" stroke={color} strokeWidth="2" strokeLinecap="round" />
+        <circle cx="11" cy="5" r="2.5" fill={color} />
+      </svg>
+      <span className="text-xs font-medium text-slate-600">{label}</span>
+    </div>
+  );
+}
 
 // ─── Searchable brand dropdown ────────────────────────────────────────────────
 function BrandSearchDropdown({ brands, selectedIds, onAdd, placeholder = 'Search and add brand...' }) {
@@ -67,13 +259,8 @@ function BrandSearchDropdown({ brands, selectedIds, onAdd, placeholder = 'Search
                 onMouseDown={() => { onAdd(b); setQuery(''); setOpen(false); }}
                 className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-indigo-50"
               >
-                <span
-                  className="rounded px-2 py-0.5 text-xs font-bold"
-                  style={bStyle
-                    ? { background: bStyle.bg, color: bStyle.text }
-                    : { backgroundColor: b.color || '#64748b', color: '#fff' }
-                  }
-                >
+                <span className="rounded px-2 py-0.5 text-xs font-bold"
+                  style={bStyle ? { background: bStyle.bg, color: bStyle.text } : { backgroundColor: b.color || '#64748b', color: '#fff' }}>
                   {b.code}
                 </span>
                 <span className="text-slate-500">— {b.name}</span>
@@ -97,9 +284,6 @@ function BrandCompare({ initialBrand, brands, onGetRankingHistory }) {
   const [selectedBrands, setSelectedBrands] = useState([initialBrand]);
   const [dataMap, setDataMap] = useState({});
   const [loadingIds, setLoadingIds] = useState([]);
-
-  const svgWidth = 720;
-  const svgHeight = 220;
 
   const loadBrandData = async (brand) => {
     setLoadingIds((prev) => [...prev, brand._id]);
@@ -142,100 +326,68 @@ function BrandCompare({ initialBrand, brands, onGetRankingHistory }) {
     };
   });
 
+  // brand series: points use `value` field
+  const chartSeries = selectedBrands.map((b) => {
+    const bStyle = BRAND_MAP[b.code];
+    const color = bStyle?.color || b.color || '#64748b';
+    const data = dataMap[b._id];
+    const points = (data?.points || [])
+      .filter((p) => p.bestOwnRank !== null)
+      .map((p) => ({ checkedAt: p.checkedAt, value: p.bestOwnRank }));
+    return { label: b.code, color, points };
+  });
+
+  const hasAnyData = chartSeries.some((s) => s.points.length > 0);
+
   return (
     <div className="space-y-4 p-4">
       {/* Controls */}
       <div className="flex flex-wrap items-center gap-3">
         <div className="flex flex-wrap gap-2">
           {RANGES.map((r) => (
-            <button
-              key={r.id}
-              type="button"
-              onClick={() => setRange(r.id)}
-              className={`rounded-md px-3 py-1.5 text-sm font-medium ${
-                range === r.id ? 'bg-black text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-              }`}
-            >
+            <button key={r.id} type="button" onClick={() => setRange(r.id)}
+              className={`rounded-md px-3 py-1.5 text-sm font-medium ${range === r.id ? 'bg-black text-amber-100' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'}`}>
               {r.label}
             </button>
           ))}
         </div>
         <div className="ml-auto w-64">
-          <BrandSearchDropdown
-            brands={brands}
-            selectedIds={selectedBrands.map((b) => b._id)}
-            onAdd={addBrand}
-            placeholder="Add brand to compare..."
-          />
+          <BrandSearchDropdown brands={brands} selectedIds={selectedBrands.map((b) => b._id)} onAdd={addBrand} placeholder="Add brand to compare..." />
         </div>
       </div>
 
-      {/* Selected brand pills */}
+      {/* Brand pills */}
       <div className="flex flex-wrap gap-2">
         {selectedBrands.map((b) => {
           const bStyle = BRAND_MAP[b.code];
           return (
-            <div
-              key={b._id}
-              className="flex items-center gap-2 rounded-full px-3 py-1 text-sm font-semibold shadow-sm"
-              style={bStyle
-                ? { background: bStyle.bg, color: bStyle.text }
-                : { backgroundColor: b.color || '#64748b', color: '#fff' }
-              }
-            >
+            <div key={b._id} className="flex items-center gap-2 rounded-full px-3 py-1 text-sm font-semibold shadow-sm"
+              style={bStyle ? { background: bStyle.bg, color: bStyle.text } : { backgroundColor: b.color || '#64748b', color: '#fff' }}>
               {b.code}
               {selectedBrands.length > 1 && (
-                <button
-                  type="button"
-                  onClick={() => removeBrand(b._id)}
-                  className="ml-1 opacity-70 hover:opacity-100"
-                >
-                  ×
-                </button>
+                <button type="button" onClick={() => removeBrand(b._id)} className="ml-1 opacity-70 hover:opacity-100">×</button>
               )}
             </div>
           );
         })}
-        {loadingIds.length > 0 && (
-          <span className="text-xs text-slate-500 self-center">Loading data...</span>
-        )}
+        {loadingIds.length > 0 && <span className="text-xs text-slate-500 self-center">Loading data...</span>}
       </div>
 
-      {/* Graph */}
-      <div className="rounded-lg border border-slate-200 p-3">
-        <h3 className="mb-2 text-sm font-semibold text-slate-700">Rank Over Time (lower = better)</h3>
-        <div className="overflow-x-auto">
-          <svg viewBox={`0 0 ${svgWidth} ${svgHeight}`} className="h-56 w-full min-w-[600px]">
-            {[1, 3, 5, 7, 10].map((rank) => {
-              const y = ((rank - 1) / 10) * svgHeight;
-              return (
-                <g key={rank}>
-                  <line x1="0" y1={y} x2={svgWidth} y2={y} stroke="#e2e8f0" strokeWidth="1" />
-                  <text x="4" y={Math.max(12, y - 4)} fill="#94a3b8" fontSize="11">#{rank}</text>
-                </g>
-              );
-            })}
-
-            {selectedBrands.map((b) => {
-              const bStyle = BRAND_MAP[b.code];
-              const data = dataMap[b._id];
-              const points = (data?.points || []).filter((p) => p.bestOwnRank !== null);
-              if (!points.length) return null;
-              const polyline = buildPoints(points, svgWidth, svgHeight, 'bestOwnRank');
-              const color = bStyle?.color || b.color || '#64748b';
-              return (
-                <g key={b._id}>
-                  <polyline fill="none" stroke={color} strokeWidth="2.5" points={polyline} />
-                  {points.map((point, index) => {
-                    const x = points.length > 1 ? (index * svgWidth) / (points.length - 1) : svgWidth / 2;
-                    const y = ((point.bestOwnRank - 1) / 10) * svgHeight;
-                    return <circle key={index} cx={x} cy={y} r="4" fill={color} />;
-                  })}
-                </g>
-              );
-            })}
-          </svg>
+      {/* Polyline chart */}
+      <div className="rounded-lg border border-slate-200 p-4">
+        <div className="mb-3 flex items-center justify-between flex-wrap gap-2">
+          <h3 className="text-sm font-semibold text-slate-700">
+            Brand Rankings Over Time <span className="font-normal text-slate-400">(lower = better)</span>
+          </h3>
+          <div className="flex flex-wrap gap-3">
+            {chartSeries.map((s) => <LegendItem key={s.label} color={s.color} label={s.label} />)}
+          </div>
         </div>
+        {hasAnyData ? (
+          <PolylineChart series={chartSeries} height={280} valueKey="value" />
+        ) : (
+          <p className="py-10 text-center text-sm text-slate-400">No ranking data available for this period.</p>
+        )}
       </div>
 
       {/* Summary table */}
@@ -260,13 +412,8 @@ function BrandCompare({ initialBrand, brands, onGetRankingHistory }) {
                 <tr key={brand._id}>
                   <td className="px-4 py-2">
                     <div className="flex items-center gap-2">
-                      <span
-                        className="rounded px-2 py-0.5 text-xs font-bold"
-                        style={bStyle
-                          ? { background: bStyle.bg, color: bStyle.text }
-                          : { backgroundColor: brand.color || '#64748b', color: '#fff' }
-                        }
-                      >
+                      <span className="rounded px-2 py-0.5 text-xs font-bold"
+                        style={bStyle ? { background: bStyle.bg, color: bStyle.text } : { backgroundColor: brand.color || '#64748b', color: '#fff' }}>
                         {brand.code}
                       </span>
                       <span className="text-xs text-slate-500">— {brand.name}</span>
@@ -288,22 +435,18 @@ function BrandCompare({ initialBrand, brands, onGetRankingHistory }) {
 }
 
 // ─── Domain vs Domain compare ─────────────────────────────────────────────────
-function DomainCompare({ selectedBrand, domainItems, allDomains, onGetRankingHistory }) {
+function DomainCompare({ selectedBrand, domainItems = [], allDomains = [], onGetRankingHistory }) {
   const [range, setRange] = useState('7d');
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [compareDomains, setCompareDomains] = useState(domainItems);
-
-  const svgWidth = 720;
-  const svgHeight = 220;
+  const [compareDomains, setCompareDomains] = useState((domainItems ?? []).slice(0, MAX_DOMAINS));
 
   useEffect(() => {
     if (!selectedBrand?._id) return;
     let cancelled = false;
     const load = async () => {
-      setLoading(true);
-      setError('');
+      setLoading(true); setError('');
       try {
         const result = await onGetRankingHistory(selectedBrand._id, range);
         if (!cancelled) setData(result);
@@ -318,9 +461,9 @@ function DomainCompare({ selectedBrand, domainItems, allDomains, onGetRankingHis
   }, [selectedBrand?._id, range]);
 
   const addDomain = (domain) => {
-    if (!compareDomains.find((d) => d._id === domain._id)) {
+    if (compareDomains.length >= MAX_DOMAINS) return;
+    if (!compareDomains.find((d) => d._id === domain._id))
       setCompareDomains((prev) => [...prev, domain]);
-    }
   };
 
   const removeDomain = (id) => {
@@ -328,9 +471,7 @@ function DomainCompare({ selectedBrand, domainItems, allDomains, onGetRankingHis
     setCompareDomains((prev) => prev.filter((d) => d._id !== id));
   };
 
-  const availableDomains = allDomains.filter(
-    (d) => !compareDomains.find((c) => c._id === d._id)
-  );
+  const availableDomains = allDomains.filter((d) => !compareDomains.find((c) => c._id === d._id));
 
   const domainTrendMap = useMemo(() => {
     const map = {};
@@ -338,45 +479,47 @@ function DomainCompare({ selectedBrand, domainItems, allDomains, onGetRankingHis
     return map;
   }, [data]);
 
+  // domain series: points use `rank` field
+  const polylineSeries = compareDomains.map((d, index) => {
+    const color = DOMAIN_COLORS[index % DOMAIN_COLORS.length];
+    const trend = domainTrendMap[d.domain];
+    const points = (trend?.points || [])
+      .filter((p) => p.rank !== null)
+      .map((p) => ({ checkedAt: p.checkedAt, rank: p.rank }));
+    return { label: d.domain, color, points };
+  });
+
+  const hasAnyData = polylineSeries.some((s) => s.points.length > 0);
+
   return (
     <div className="space-y-4 p-4">
       {/* Controls */}
       <div className="flex flex-wrap items-center gap-3">
         <div className="flex flex-wrap gap-2">
           {RANGES.map((r) => (
-            <button
-              key={r.id}
-              type="button"
-              onClick={() => setRange(r.id)}
-              className={`rounded-md px-3 py-1.5 text-sm font-medium ${
-                range === r.id ? 'bg-black text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-              }`}
-            >
+            <button key={r.id} type="button" onClick={() => setRange(r.id)}
+              className={`rounded-md px-3 py-1.5 text-sm font-medium ${range === r.id ? 'bg-black text-amber-100' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'}`}>
               {r.label}
             </button>
           ))}
         </div>
-        {availableDomains.length > 0 && (
-          <div className="ml-auto w-64">
+        <div className="ml-auto flex items-center gap-2">
+          {compareDomains.length >= MAX_DOMAINS ? (
+            <span className="text-xs text-slate-400 italic">Max {MAX_DOMAINS} domains</span>
+          ) : availableDomains.length > 0 ? (
             <select
-              onChange={(e) => {
-                const d = availableDomains.find((x) => x._id === e.target.value);
-                if (d) addDomain(d);
-                e.target.value = '';
-              }}
+              onChange={(e) => { const d = availableDomains.find((x) => x._id === e.target.value); if (d) addDomain(d); e.target.value = ''; }}
               defaultValue=""
-              className="w-full rounded-md border border-slate-300 px-3 py-1.5 text-sm focus:border-indigo-500 focus:outline-none"
+              className="w-56 rounded-md border border-slate-300 px-3 py-1.5 text-sm focus:border-indigo-500 focus:outline-none"
             >
-              <option value="" disabled>Add domain to compare...</option>
-              {availableDomains.map((d) => (
-                <option key={d._id} value={d._id}>{d.domain}</option>
-              ))}
+              <option value="" disabled>Add domain...</option>
+              {availableDomains.map((d) => <option key={d._id} value={d._id}>{d.domain}</option>)}
             </select>
-          </div>
-        )}
+          ) : null}
+        </div>
       </div>
 
-      {/* Selected domain pills */}
+      {/* Domain pills */}
       <div className="flex flex-wrap gap-2">
         {compareDomains.map((d, index) => {
           const color = DOMAIN_COLORS[index % DOMAIN_COLORS.length];
@@ -389,13 +532,7 @@ function DomainCompare({ selectedBrand, domainItems, allDomains, onGetRankingHis
               <span className="h-2 w-2 rounded-full" style={{ backgroundColor: color }} />
               {d.domain}
               {compareDomains.length > 1 && (
-                <button
-                  type="button"
-                  onClick={() => removeDomain(d._id)}
-                  className="ml-1 text-slate-400 hover:text-red-500"
-                >
-                  ×
-                </button>
+                <button type="button" onClick={() => removeDomain(d._id)} className="ml-1 text-slate-400 hover:text-red-500">×</button>
               )}
             </div>
           );
@@ -405,39 +542,23 @@ function DomainCompare({ selectedBrand, domainItems, allDomains, onGetRankingHis
 
       {error && <p className="rounded bg-red-50 p-2 text-sm text-red-700">{error}</p>}
 
-      {/* Graph */}
-      <div className="rounded-lg border border-slate-200 p-3">
-        <h3 className="mb-2 text-sm font-semibold text-slate-700">Domain Rank Over Time (lower = better)</h3>
-        <div className="overflow-x-auto">
-          <svg viewBox={`0 0 ${svgWidth} ${svgHeight}`} className="h-56 w-full min-w-[600px]">
-            {[1, 3, 5, 7, 10].map((rank) => {
-              const y = ((rank - 1) / 10) * svgHeight;
-              return (
-                <g key={rank}>
-                  <line x1="0" y1={y} x2={svgWidth} y2={y} stroke="#e2e8f0" strokeWidth="1" />
-                  <text x="4" y={Math.max(12, y - 4)} fill="#94a3b8" fontSize="11">#{rank}</text>
-                </g>
-              );
-            })}
-            {compareDomains.map((d, index) => {
-              const color = DOMAIN_COLORS[index % DOMAIN_COLORS.length];
-              const trend = domainTrendMap[d.domain];
-              const points = (trend?.points || []).filter((p) => p.rank !== null);
-              if (!points.length) return null;
-              const polyline = buildPoints(points, svgWidth, svgHeight, 'rank');
-              return (
-                <g key={d._id}>
-                  <polyline fill="none" stroke={color} strokeWidth="2.5" points={polyline} />
-                  {points.map((point, i) => {
-                    const x = points.length > 1 ? (i * svgWidth) / (points.length - 1) : svgWidth / 2;
-                    const y = ((point.rank - 1) / 10) * svgHeight;
-                    return <circle key={i} cx={x} cy={y} r="4" fill={color} />;
-                  })}
-                </g>
-              );
-            })}
-          </svg>
+      {/* Polyline chart */}
+      <div className="rounded-lg border border-slate-200 p-4">
+        <div className="mb-3 flex items-center justify-between flex-wrap gap-2">
+          <h3 className="text-sm font-semibold text-slate-700">
+            Domain Rankings Over Time <span className="font-normal text-slate-400">(lower = better)</span>
+          </h3>
+          <div className="flex flex-wrap gap-3">
+            {compareDomains.map((d, index) => (
+              <LegendItem key={d._id} color={DOMAIN_COLORS[index % DOMAIN_COLORS.length]} label={d.domain} />
+            ))}
+          </div>
         </div>
+        {hasAnyData ? (
+          <PolylineChart series={polylineSeries} height={280} valueKey="rank" />
+        ) : (
+          <p className="py-10 text-center text-sm text-slate-400">No ranking data available for this period.</p>
+        )}
       </div>
 
       {/* Summary table */}
@@ -487,18 +608,9 @@ function ComparePanel({ mode, selectedBrand, brands, domainItems, allDomains, on
   return (
     <div className="rounded-lg border border-slate-200 bg-white shadow-sm overflow-hidden">
       {mode === 'brand' ? (
-        <BrandCompare
-          initialBrand={selectedBrand}
-          brands={brands}
-          onGetRankingHistory={onGetRankingHistory}
-        />
+        <BrandCompare initialBrand={selectedBrand} brands={brands} onGetRankingHistory={onGetRankingHistory} />
       ) : (
-        <DomainCompare
-          selectedBrand={selectedBrand}
-          domainItems={domainItems}
-          allDomains={allDomains}
-          onGetRankingHistory={onGetRankingHistory}
-        />
+        <DomainCompare selectedBrand={selectedBrand} domainItems={domainItems} allDomains={allDomains} onGetRankingHistory={onGetRankingHistory} />
       )}
     </div>
   );
