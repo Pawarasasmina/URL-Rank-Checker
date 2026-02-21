@@ -50,7 +50,7 @@ const getIntervalMinutes = (settings) => {
   return 60;
 };
 
-const buildSchedulePreview = (settings, schedulerStatus) => {
+const buildSchedulePreview = (settings, schedulerStatus, persistedSlotStatuses = []) => {
   const intervalMinutes = getIntervalMinutes(settings);
   const slotMs = intervalMinutes * 60 * 1000;
   const now = new Date();
@@ -75,6 +75,16 @@ const buildSchedulePreview = (settings, schedulerStatus) => {
         : '';
     recentRunStatusBySlot.set(slotKey, { status, tooltip });
   });
+  const persistedStatusBySlot = new Map();
+  (persistedSlotStatuses || []).forEach((item) => {
+    const slotAt = item?.slotAt ? new Date(item.slotAt) : null;
+    const slotKey = toMinuteKey(slotAt);
+    if (slotKey === null || persistedStatusBySlot.has(slotKey)) return;
+    persistedStatusBySlot.set(slotKey, {
+      status: item?.status || 'Success',
+      tooltip: '',
+    });
+  });
   const nextAutoKey = toMinuteKey(settings?.nextAutoCheckAt);
 
   return Array.from({ length: previousSlots + nextSlotsIn12Hours + 1 }, (_, index) => {
@@ -85,6 +95,10 @@ const buildSchedulePreview = (settings, schedulerStatus) => {
     let tooltip = '';
     if (slotKey !== null && recentRunStatusBySlot.has(slotKey)) {
       const slotMeta = recentRunStatusBySlot.get(slotKey);
+      status = slotMeta.status;
+      tooltip = slotMeta.tooltip || '';
+    } else if (slotKey !== null && persistedStatusBySlot.has(slotKey)) {
+      const slotMeta = persistedStatusBySlot.get(slotKey);
       status = slotMeta.status;
       tooltip = slotMeta.tooltip || '';
     } else if (slotAt <= now) {
@@ -176,7 +190,7 @@ function AdminPanel({
   const autoState = getAutoState(settings, schedulerStatus);
   const progress = schedulerStatus?.progress || { processedBrands: 0, totalBrands: 0, brandCode: null };
   const selectedIntervalValue = String(getIntervalMinutes(settings));
-  const schedulePreview = buildSchedulePreview(settings, schedulerStatus);
+  const schedulePreview = buildSchedulePreview(settings, schedulerStatus, dashboard?.autoCheckSlotStatuses || []);
   const INITIAL_SLOT_COUNT = 14;
   const [showAllSlots, setShowAllSlots] = useState(false);
   const visibleSchedule = showAllSlots ? schedulePreview : schedulePreview.slice(0, INITIAL_SLOT_COUNT);

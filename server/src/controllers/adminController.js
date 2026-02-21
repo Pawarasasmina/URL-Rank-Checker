@@ -19,6 +19,36 @@ const getLogLimit = (queryLimit) => {
   const limitRaw = Number(queryLimit);
   return Number.isFinite(limitRaw) ? Math.max(1, Math.min(200, limitRaw)) : 100;
 };
+const buildAutoCheckSlotStatuses = ({ logs, intervalMinutes }) => {
+  const slotMs = Math.max(1, intervalMinutes) * 60 * 1000;
+  const bySlot = new Map();
+
+  logs.forEach((item) => {
+    const createdAt = item?.createdAt ? new Date(item.createdAt) : null;
+    if (!createdAt || Number.isNaN(createdAt.getTime())) return;
+
+    const slotStartMs = Math.floor(createdAt.getTime() / slotMs) * slotMs;
+    const slotKey = String(slotStartMs);
+    const existing = bySlot.get(slotKey) || { slotAt: new Date(slotStartMs), okCount: 0, failCount: 0 };
+
+    if (item?.metadata?.ok === false) {
+      existing.failCount += 1;
+    } else {
+      existing.okCount += 1;
+    }
+
+    bySlot.set(slotKey, existing);
+  });
+
+  return Array.from(bySlot.values())
+    .map((item) => ({
+      slotAt: item.slotAt,
+      status: item.failCount > 0 ? 'Failure' : 'Success',
+      okCount: item.okCount,
+      failCount: item.failCount,
+    }))
+    .sort((a, b) => new Date(a.slotAt) - new Date(b.slotAt));
+};
 
 const getAdminSettings = async (req, res, next) => {
   try {
@@ -241,6 +271,19 @@ const getAdminDashboard = async (req, res, next) => {
     );
 
     const schedulerStatus = req.app.locals.autoCheckScheduler?.getStatus?.() || null;
+    const intervalMinutes = hoursToMinutes(settings.checkIntervalHours || 1);
+    const autoCheckLogWindowStart = new Date(Date.now() - 48 * 60 * 60 * 1000);
+    const autoCheckLogs = await DomainActivityLog.find({
+      action: DOMAIN_ACTIVITY_ACTIONS.AUTO_CHECK,
+      createdAt: { $gte: autoCheckLogWindowStart },
+    })
+      .select('createdAt metadata.ok')
+      .sort({ createdAt: -1 })
+      .limit(5000);
+    const autoCheckSlotStatuses = buildAutoCheckSlotStatuses({
+      logs: autoCheckLogs,
+      intervalMinutes,
+    });
 
     return res.json({
       settings: getSanitizedSettings(settings),
@@ -256,6 +299,7 @@ const getAdminDashboard = async (req, res, next) => {
         : null,
       recentRunCount: recentRuns.length,
       schedulerStatus,
+      autoCheckSlotStatuses,
     });
   } catch (error) {
     return next(error);
