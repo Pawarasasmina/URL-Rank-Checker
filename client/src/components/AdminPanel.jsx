@@ -191,9 +191,6 @@ function AdminPanel({
   const progress = schedulerStatus?.progress || { processedBrands: 0, totalBrands: 0, brandCode: null };
   const selectedIntervalValue = String(getIntervalMinutes(settings));
   const schedulePreview = buildSchedulePreview(settings, schedulerStatus, dashboard?.autoCheckSlotStatuses || []);
-  const INITIAL_SLOT_COUNT = 14;
-  const [showAllSlots, setShowAllSlots] = useState(false);
-  const visibleSchedule = showAllSlots ? schedulePreview : schedulePreview.slice(0, INITIAL_SLOT_COUNT);
 
   const [newKeyName, setNewKeyName] = useState('');
   const [newKeyValue, setNewKeyValue] = useState('');
@@ -282,8 +279,8 @@ function AdminPanel({
                 <p>Current brand: {schedulerStatus?.isRunning ? progress.brandCode || '-' : '-'}</p>
               </div>
 
-              <div className="mt-3 rounded-md border border-slate-200 bg-white p-3">
-                <p className="text-xs font-semibold uppercase tracking-wide text-slate-600">Schedule Window (WIB: Previous 2 + Next 12 Hours)</p>
+                <div className="mt-3 rounded-md border border-slate-200 bg-white p-3">
+                <p className="text-xs font-semibold uppercase tracking-wide text-slate-600">Schedule Window (WIB: Previous 2 + Next 12 Hours From Now)</p>
                 <div className="mt-2 flex flex-wrap gap-2 text-[11px] text-slate-600">
                   <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-emerald-700">Success</span>
                   <span className="rounded-full bg-rose-100 px-2 py-0.5 text-rose-700">Failure</span>
@@ -293,7 +290,7 @@ function AdminPanel({
                   <span className="rounded-full bg-slate-100 px-2 py-0.5 text-slate-700">Scheduled</span>
                 </div>
                 <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6">
-                  {visibleSchedule.map((item) => (
+                  {schedulePreview.map((item) => (
                     <div key={item.key} className="rounded-md border border-slate-200 bg-slate-50 p-2">
                       <p className="text-xs font-semibold text-slate-700">{formatClock(item.at)}</p>
                       <span
@@ -317,15 +314,6 @@ function AdminPanel({
                     </div>
                   ))}
                 </div>
-                {schedulePreview.length > INITIAL_SLOT_COUNT && (
-                  <button
-                    type="button"
-                    onClick={() => setShowAllSlots((prev) => !prev)}
-                    className="mt-3 rounded-md bg-slate-100 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-200"
-                  >
-                    {showAllSlots ? 'Show Less' : `Show More (${schedulePreview.length - INITIAL_SLOT_COUNT} more)`}
-                  </button>
-                )}
               </div>
 
               {schedulerStatus?.lastError && (
