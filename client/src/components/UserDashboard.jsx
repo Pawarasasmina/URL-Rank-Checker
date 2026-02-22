@@ -302,19 +302,32 @@ function BrandCarousel({ brands, selectedRunId, onSelectRun }) {
   const next = () => setIndex((i) => (i + 1) % brands.length);
   const getCard = (offset) => brands[(index + offset + brands.length) % brands.length];
   const maxIndex = Math.max(0, brands.length - 1);
-
-  const desktopOffsets = [-2, -1, 0, 1, 2];
+  const hasSingle = brands.length === 1;
+  const hasTwo = brands.length === 2;
+  const hasThree = brands.length === 3;
+  const desktopOffsets = hasSingle ? [0] : hasTwo ? [-1, 0] : hasThree ? [-1, 0, 1] : [-2, -1, 0, 1, 2];
+  const desktopGridClass = hasSingle
+    ? 'hidden flex-1 grid-cols-1 items-stretch gap-3 lg:grid lg:justify-items-center perspective-[1400px]'
+    : hasTwo
+      ? 'hidden flex-1 grid-cols-2 items-stretch gap-3 lg:grid perspective-[1400px]'
+      : hasThree
+        ? 'hidden flex-1 grid-cols-3 items-stretch gap-3 lg:grid perspective-[1400px]'
+        : 'hidden flex-1 grid-cols-5 items-stretch gap-3 lg:grid perspective-[1400px]';
 
   return (
     <div className="flex flex-col gap-5">
       <div className="flex items-center gap-3">
-        <button
-          type="button"
-          onClick={prev}
-          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-slate-200 bg-white text-xl text-slate-500 shadow transition hover:bg-slate-50"
-        >{'<'}</button>
+        {!hasSingle && (
+          <button
+            type="button"
+            onClick={prev}
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-slate-200 bg-white text-xl text-slate-500 shadow transition hover:bg-slate-50"
+          >
+            {'<'}
+          </button>
+        )}
 
-        <div className="hidden flex-1 grid-cols-5 items-stretch gap-3 lg:grid perspective-[1400px]">
+        <div className={desktopGridClass}>
           {desktopOffsets.map((offset) => {
             const isActive = offset === 0;
             const brand = getCard(offset);
@@ -322,7 +335,7 @@ function BrandCarousel({ brands, selectedRunId, onSelectRun }) {
             return (
               <div
                 key={`${brand._id || brand.code}-${offset}`}
-                className={!isActive ? 'cursor-pointer' : ''}
+                className={`${!isActive ? 'cursor-pointer' : ''} w-full max-w-[340px]`}
                 onClick={!isActive ? onEdge : undefined}
               >
                 <BrandCarouselCard
@@ -337,34 +350,40 @@ function BrandCarousel({ brands, selectedRunId, onSelectRun }) {
           })}
         </div>
 
-        <div className="flex-1 lg:hidden">
+        <div className={`flex-1 lg:hidden ${hasSingle ? 'mx-auto w-full max-w-[340px]' : ''}`}>
           <BrandCarouselCard brand={getCard(0)} active={true} depth={0} selectedRunId={selectedRunId} onSelectRun={onSelectRun} />
         </div>
 
-        <button
-          type="button"
-          onClick={next}
-          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-slate-200 bg-white text-xl text-slate-500 shadow transition hover:bg-slate-50"
-        >{'>'}</button>
+        {!hasSingle && (
+          <button
+            type="button"
+            onClick={next}
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-slate-200 bg-white text-xl text-slate-500 shadow transition hover:bg-slate-50"
+          >
+            {'>'}
+          </button>
+        )}
       </div>
 
-      <div className="mx-auto mt-12 w-full max-w-xl px-4">
-        <div className="rounded-full border border-slate-200 bg-white px-3 py-2 shadow-sm">
-          <input
-            type="range"
-            min={0}
-            max={maxIndex}
-            step={1}
-            value={index}
-            onChange={(e) => setIndex(Number(e.target.value))}
-            aria-label="Carousel slider"
-            className="h-2 w-full cursor-pointer appearance-none rounded-full [&::-moz-range-thumb]:h-4 [&::-moz-range-thumb]:w-4 [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:border-0 [&::-moz-range-thumb]:bg-slate-500 [&::-moz-range-thumb]:shadow [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-slate-500 [&::-webkit-slider-thumb]:shadow"
-            style={{
-              background: '#e2e8f0',
-            }}
-          />
+      {!hasSingle && (
+        <div className="mx-auto mt-12 w-full max-w-xl px-4">
+          <div className="rounded-full border border-slate-200 bg-white px-3 py-2 shadow-sm">
+            <input
+              type="range"
+              min={0}
+              max={maxIndex}
+              step={1}
+              value={index}
+              onChange={(e) => setIndex(Number(e.target.value))}
+              aria-label="Carousel slider"
+              className="h-2 w-full cursor-pointer appearance-none rounded-full [&::-moz-range-thumb]:h-4 [&::-moz-range-thumb]:w-4 [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:border-0 [&::-moz-range-thumb]:bg-slate-500 [&::-moz-range-thumb]:shadow [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-slate-500 [&::-webkit-slider-thumb]:shadow"
+              style={{
+                background: '#e2e8f0',
+              }}
+            />
+          </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }
