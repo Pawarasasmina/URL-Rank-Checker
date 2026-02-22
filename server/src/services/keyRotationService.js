@@ -1,6 +1,29 @@
 ﻿const AdminSettings = require('../models/AdminSettings');
 
 const RATE_LIMIT_STATUSES = new Set([401, 402, 403, 429]);
+const ROTATE_ON_400_KEYWORDS = [
+  'credit',
+  'credits',
+  'quota',
+  'limit',
+  'not enough',
+  'exhaust',
+  'expired',
+  'invalid api key',
+  'invalid key',
+  'unauthorized',
+  'forbidden',
+];
+
+const shouldRotateToNextKey = (error) => {
+  const status = Number(error?.response?.status);
+  if (RATE_LIMIT_STATUSES.has(status)) return true;
+  if (status !== 400) return false;
+
+  const payload = error?.response?.data || {};
+  const message = `${payload.message || ''} ${payload.error || ''} ${error?.message || ''}`.toLowerCase();
+  return ROTATE_ON_400_KEYWORDS.some((keyword) => message.includes(keyword));
+};
 
 const parseNumericLike = (value) => {
   if (value === undefined || value === null) return null;
@@ -103,7 +126,7 @@ const createKeyRotationService = () => {
           extractRemainingTokens(error.response?.headers || {}) ??
           extractRemainingFromBody(error.response?.data || {});
 
-        if (RATE_LIMIT_STATUSES.has(error.response?.status)) {
+        if (shouldRotateToNextKey(error)) {
           keyEntry.exhaustedAt = new Date();
           await settings.save();
           continue;
