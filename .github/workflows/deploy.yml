@@ -25,12 +25,12 @@ jobs:
             echo "Installing backend dependencies..."
             cd server
             npm install
-            pm2 restart backend
+            pm2 restart apirankchecker
 
             echo "Installing frontend dependencies..."
             cd ../client
             npm install
             npm run build
-            pm2 restart frontend
+            pm2 restart clientrankchecker
 
             echo "Deployment complete!"
