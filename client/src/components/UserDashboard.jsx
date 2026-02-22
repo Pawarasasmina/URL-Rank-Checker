@@ -396,6 +396,7 @@ function BrandCarousel({ brands, selectedRunId, onSelectRun, focusedBrandId = ''
   );
 }
 
+
 // ── Main Dashboard ────────────────────────────────────────────────────────────
 function UserDashboard({ username = 'User', brands = [], totalDomains = 0, focusedBrandId = '' }) {
   const totalBrands = brands.length;
