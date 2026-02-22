@@ -7,7 +7,7 @@ const serpResultItemSchema = new mongoose.Schema(
     snippet: { type: String, default: '' },
     link: { type: String, default: '' },
     domainHost: { type: String, default: '' },
-    badge: { type: String, enum: ['OWN', 'COMPETITOR', 'UNKNOWN'], default: 'UNKNOWN' },
+    badge: { type: String, enum: ['OWN', 'UNKNOWN'], default: 'UNKNOWN' },
     matchType: { type: String, default: 'none' },
     matchedBrand: {
       _id: { type: mongoose.Schema.Types.ObjectId, ref: 'Brand' },
@@ -41,7 +41,6 @@ const serpRunSchema = new mongoose.Schema(
     keyName: { type: String, default: '' },
     keyRemaining: { type: Number, default: null },
     ownCount: { type: Number, default: 0 },
-    competitorCount: { type: Number, default: 0 },
     unknownCount: { type: Number, default: 0 },
     bestOwnRank: { type: Number, default: null },
     results: { type: [serpResultItemSchema], default: [] },

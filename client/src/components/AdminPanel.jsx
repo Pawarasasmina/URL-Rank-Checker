@@ -205,7 +205,7 @@ function AdminPanel({
           {error && <p className="mt-3 rounded bg-red-50 p-2 text-sm text-red-700">{error}</p>}
 
           {settings && (
-            <div className="mt-4 grid gap-3 lg:grid-cols-[220px_auto]">
+            <div className="mt-4 grid items-end gap-3 lg:grid-cols-[220px_auto]">
               <div>
                 <label className="block text-xs font-semibold uppercase tracking-wide text-slate-600">Checking Frequency</label>
                 <select

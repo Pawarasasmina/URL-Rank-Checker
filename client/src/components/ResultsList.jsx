@@ -52,7 +52,6 @@ function ResultsList({ selectedBrand, payload }) {
                 <Badge
                   badge={row.badge}
                   selectedBrandColor={selectedBrand?.color}
-                  matchedBrand={row.matchedBrand}
                 />
               </td>
             </tr>

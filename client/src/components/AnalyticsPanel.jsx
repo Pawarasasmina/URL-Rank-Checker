@@ -1,7 +1,7 @@
 ﻿import { useEffect, useMemo, useState } from 'react';
 
 const RANGES = [
-  { id: '1d', label: 'Past Day' },
+  { id: '1d', label: 'Last 24 Hours' },
   { id: '7d', label: '7 Days' },
   { id: '14d', label: '14 Days' },
   { id: '30d', label: '30 Days' },
