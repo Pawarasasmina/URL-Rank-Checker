@@ -12,25 +12,16 @@ const { createAuthMiddleware } = require('./middleware/auth');
 const { USER_ROLES } = require('./models/User');
 
 const buildAllowedOrigins = () => {
-  const defaults = [
-    'https://url-rank-checker.vercel.app',
-    'http://localhost:5173',
-  ];
-
-  const fromEnv = String(process.env.CORS_ORIGINS || '')
+  return String(process.env.CORS_ORIGINS || '')
     .split(',')
     .map((item) => item.trim())
     .filter(Boolean);
-
-  return [...new Set([...defaults, ...fromEnv])];
 };
 
 const isAllowedOrigin = (origin, allowedOrigins) => {
   if (!origin) return true;
+  if (!allowedOrigins.length) return true;
   if (allowedOrigins.includes(origin)) return true;
-
-  // Allow Vercel preview deployments: https://*.vercel.app
-  if (/^https:\/\/[a-z0-9-]+\.vercel\.app$/i.test(origin)) return true;
 
   return false;
 };

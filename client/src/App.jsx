@@ -40,7 +40,7 @@ import {
 } from './services/api';
 
 function App() {
-  const socketUrl = import.meta.env.VITE_SOCKET_URL || (window.location.hostname === 'localhost' ? 'http://localhost:4000' : 'http://168.231.122.240:4000');;
+  const socketUrl = import.meta.env.VITE_SOCKET_URL || '';
   const getWibClock = () => ({
     time: new Intl.DateTimeFormat('id-ID', {
       timeZone: 'Asia/Jakarta',
@@ -235,7 +235,7 @@ function App() {
   }, [tab, isAdmin]);
 
   useEffect(() => {
-    if (!isAdmin || tab !== 'admin') return undefined;
+    if (!isAdmin || tab !== 'admin' || !socketUrl) return undefined;
 
     const socket = io(socketUrl, { transports: ['websocket', 'polling'] });
 
