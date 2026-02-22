@@ -289,12 +289,20 @@ function BrandCarouselCard({ brand, active, depth = 2, selectedRunId, onSelectRu
 }
 
 // ── Carousel ─────────────────────────────────────────────────────────────────
-function BrandCarousel({ brands, selectedRunId, onSelectRun }) {
+function BrandCarousel({ brands, selectedRunId, onSelectRun, focusedBrandId = '' }) {
   const [index, setIndex] = useState(0);
 
   useEffect(() => {
     if (index >= brands.length) setIndex(0);
   }, [brands.length, index]);
+
+  useEffect(() => {
+    if (!focusedBrandId || !brands.length) return;
+    const focusedIndex = brands.findIndex((brand) => brand._id === focusedBrandId);
+    if (focusedIndex >= 0) {
+      setIndex(focusedIndex);
+    }
+  }, [focusedBrandId, brands]);
 
   if (!brands.length) return null;
 
@@ -389,7 +397,7 @@ function BrandCarousel({ brands, selectedRunId, onSelectRun }) {
 }
 
 // ── Main Dashboard ────────────────────────────────────────────────────────────
-function UserDashboard({ username = 'User', brands = [], totalDomains = 0 }) {
+function UserDashboard({ username = 'User', brands = [], totalDomains = 0, focusedBrandId = '' }) {
   const totalBrands = brands.length;
   const searchedToday = brands.filter((b) => b.lastChecked).length;
   const inTop10 = brands.filter((b) => b.currentRank !== null && b.currentRank <= 10).length;
@@ -470,6 +478,7 @@ function UserDashboard({ username = 'User', brands = [], totalDomains = 0 }) {
               brands={filteredBrands}
               selectedRunId={selectedRunId}
               onSelectRun={handleSelectRun}
+              focusedBrandId={focusedBrandId}
             />
           </div>
         )}

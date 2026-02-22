@@ -406,7 +406,7 @@ function App() {
         selectedBrandId={selectedBrand?._id}
         onSelect={(brand) => {
           setSelectedBrand(brand);
-          if (tab !== 'checker' && tab !== 'domains') {
+          if (tab !== 'dashboard' && tab !== 'checker' && tab !== 'domains') {
             setTab('domains');
           }
         }}
@@ -510,6 +510,7 @@ function App() {
             username={currentUser.username}
             brands={dashboardBrands}
             totalDomains={totalDomains}
+            focusedBrandId={selectedBrand?._id || ''}
           />
         )}
 
