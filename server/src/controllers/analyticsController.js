@@ -42,13 +42,12 @@ const getRankingHistory = async (req, res, next) => {
     const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
     const runs = await SerpRun.find({ brand: brandId, checkedAt: { $gte: since } })
       .sort({ checkedAt: 1 })
-      .select('checkedAt bestOwnRank ownCount competitorCount unknownCount query trigger results');
+      .select('checkedAt bestOwnRank ownCount unknownCount query trigger results');
 
     const points = runs.map((run) => ({
       checkedAt: run.checkedAt,
       bestOwnRank: run.bestOwnRank,
       ownCount: run.ownCount,
-      competitorCount: run.competitorCount,
       unknownCount: run.unknownCount,
       query: run.query,
       trigger: run.trigger,
@@ -128,7 +127,7 @@ const getRecentAutoChecks = async (req, res, next) => {
     const rawRuns = await SerpRun.find({ brand: brandId, trigger: 'auto' })
       .sort({ checkedAt: -1 })
       .limit(limit * 8)
-      .select('checkedAt query bestOwnRank ownCount competitorCount unknownCount results');
+      .select('checkedAt query bestOwnRank ownCount unknownCount results');
 
     // Deduplicate same-round runs (same minute) so dashboard shows unique auto-check rounds.
     const seenRoundKeys = new Set();
@@ -156,7 +155,6 @@ const getRecentAutoChecks = async (req, res, next) => {
         query: run.query,
         bestOwnRank: run.bestOwnRank,
         ownCount: run.ownCount,
-        competitorCount: run.competitorCount,
         unknownCount: run.unknownCount,
         results: (run.results || []).map((row) => ({
           rank: row.rank,

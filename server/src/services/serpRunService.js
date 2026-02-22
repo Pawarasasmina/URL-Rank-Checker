@@ -34,7 +34,6 @@ const summarizeResults = (results) => {
 
   return {
     ownCount: ownRows.length,
-    competitorCount: results.filter((item) => item.badge === 'COMPETITOR').length,
     unknownCount: results.filter((item) => item.badge === 'UNKNOWN').length,
     bestOwnRank: ownRows.length ? Math.min(...ownRows.map((item) => item.rank)) : null,
   };
@@ -90,11 +89,7 @@ const createSerpRunService = ({ cache, keyRotationService }) => {
           }
         : null;
 
-      const badge = !matchedBrand
-        ? 'UNKNOWN'
-        : matchedBrand._id.toString() === brand._id.toString()
-          ? 'OWN'
-          : 'COMPETITOR';
+      const badge = matchedBrand && matchedBrand._id.toString() === brand._id.toString() ? 'OWN' : 'UNKNOWN';
 
       return {
         rank: index + 1,
