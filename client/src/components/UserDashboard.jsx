@@ -189,54 +189,69 @@ function RunModal({ selected, onClose }) {
 }
 
 // ── Carousel Card ────────────────────────────────────────────────────────────
-function BrandCarouselCard({ brand, active, selectedRunId, onSelectRun }) {
+function BrandCarouselCard({ brand, active, depth = 2, selectedRunId, onSelectRun }) {
   const bStyle = BRAND_MAP[brand.code];
-  const bg = bStyle?.bg || brand.color || '#64748b';
-  const textColor = bStyle?.text || '#fff';
+  const brandColor = bStyle?.color || brand.color || '#6366f1';
+  const brandTextColor = bStyle?.text || '#ffffff';
 
   const rankBadge = brand.currentRank ? { label: `#${brand.currentRank}` } : { label: 'No data' };
   const trendBadge =
     brand.trend === 'up'
-      ? { label: `Up ${brand.delta}`, bg: 'rgba(52,211,153,0.25)', color: textColor }
+      ? { label: `Up ${brand.delta}`, bg: '#dcfce7', color: '#166534' }
       : brand.trend === 'down'
-      ? { label: `Down ${Math.abs(brand.delta)}`, bg: 'rgba(251,113,133,0.25)', color: textColor }
-      : { label: 'Stable', bg: 'rgba(255,255,255,0.15)', color: textColor };
+      ? { label: `Down ${Math.abs(brand.delta)}`, bg: '#fee2e2', color: '#991b1b' }
+      : { label: 'Stable', bg: '#e2e8f0', color: '#334155' };
 
   const recentRuns = brand.recentAutoChecks || [];
 
+  const cardOpacity = active ? 1 : depth === 1 ? 0.72 : 0.58;
+  const cardScale = active ? 1.04 : depth === 1 ? 0.95 : 0.9;
+  const cardTranslateY = active ? -10 : depth === 1 ? 14 : 26;
+  const cardShadow = active
+    ? '0 24px 42px rgba(15,23,42,0.28)'
+    : depth === 1
+    ? '0 12px 20px rgba(15,23,42,0.16)'
+    : '0 8px 16px rgba(15,23,42,0.1)';
+
   return (
     <div
-      className="select-none rounded-2xl p-6 shadow-lg transition-all duration-300"
+      className="relative flex select-none flex-col overflow-hidden rounded-2xl shadow-lg transition-all duration-300"
       style={{
-        background: bg,
-        opacity: active ? 1 : 0.5,
-        transform: active ? 'scale(1)' : 'scale(0.92)',
-        minHeight: '270px',
-        color: textColor,
+        backgroundColor: '#ffffff',
+        border: active ? '1px solid #cbd5e1' : '1px solid #e2e8f0',
+        opacity: cardOpacity,
+        transform: `translateY(${cardTranslateY}px) scale(${cardScale})`,
+        minHeight: '440px',
+        boxShadow: cardShadow,
+        zIndex: active ? 30 : depth === 1 ? 20 : 10,
       }}
     >
-      <span className="text-2xl font-extrabold tracking-wide" style={{ color: textColor }}>
-        {brand.code}
-      </span>
-
-      <div className="mt-3 flex flex-wrap gap-2">
-        <span className="rounded-lg px-2.5 py-1 text-xs font-semibold" style={{ backgroundColor: 'rgba(255,255,255,0.2)', color: textColor }}>
-          {rankBadge.label}
+      <div
+        className="flex basis-1/5 flex-col justify-center gap-2 px-5 py-4"
+        style={{ background: `linear-gradient(135deg, ${brandColor} 0%, #0f172a 170%)` }}
+      >
+        <span className="text-xl font-extrabold tracking-wide" style={{ color: brandTextColor }}>
+          {brand.code}
         </span>
-        <span className="rounded-lg px-2.5 py-1 text-xs font-semibold" style={{ backgroundColor: trendBadge.bg, color: trendBadge.color }}>
-          {trendBadge.label}
-        </span>
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="rounded-lg bg-white/20 px-2.5 py-1 text-xs font-semibold text-white">
+            {rankBadge.label}
+          </span>
+          <span className="rounded-lg px-2.5 py-1 text-xs font-semibold" style={{ backgroundColor: trendBadge.bg, color: trendBadge.color }}>
+            {trendBadge.label}
+          </span>
+        </div>
       </div>
 
-      <div className="mt-4">
-        <p className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: textColor, opacity: 0.85 }}>
+      <div className="flex basis-4/5 flex-col px-5 py-4">
+        <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
           Last 5 Auto Checks
         </p>
 
         {recentRuns.length === 0 ? (
-          <p className="mt-2 text-xs" style={{ color: textColor, opacity: 0.72 }}>No auto checks yet</p>
+          <p className="mt-8 text-sm text-slate-500">No auto checks yet</p>
         ) : (
-          <div className="mt-2 grid grid-cols-2 gap-1.5">
+          <div className="mt-8 flex flex-1 flex-col gap-2">
             {recentRuns.map((run) => {
               const isSelected = selectedRunId === run._id;
               const rankLabel = run.bestOwnRank ? `#${run.bestOwnRank}` : '-';
@@ -248,16 +263,21 @@ function BrandCarouselCard({ brand, active, selectedRunId, onSelectRun }) {
                     e.stopPropagation();
                     onSelectRun(brand, run);
                   }}
-                  className="rounded-md px-2 py-1 text-left text-[11px] font-semibold transition"
+                  className="group rounded-xl px-3 py-2.5 text-left text-sm font-semibold transition-all duration-200"
                   style={{
-                    backgroundColor: isSelected ? 'rgba(255,255,255,0.35)' : 'rgba(255,255,255,0.18)',
-                    color: textColor,
-                    border: isSelected ? '1px solid rgba(255,255,255,0.7)' : '1px solid transparent',
+                    backgroundColor: isSelected ? '#ffffff' : '#f1f5f9',
+                    color: '#334155',
+                    border: isSelected ? `1px solid ${brandColor}` : '1px solid #e2e8f0',
+                    boxShadow: isSelected ? '0 8px 18px rgba(15,23,42,0.14)' : '0 4px 10px rgba(15,23,42,0.06)',
                   }}
                   title={`Best rank: ${rankLabel} | Own: ${run.ownCount ?? 0}`}
                 >
-                  <span>{formatRunTime(run.checkedAt)}</span>
-                  <span className="ml-1 opacity-80">{rankLabel}</span>
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="tracking-wide text-slate-700">{formatRunTime(run.checkedAt)}</span>
+                    <span className="rounded-md bg-slate-200 px-2 py-0.5 text-xs font-bold text-slate-700">
+                      {rankLabel}
+                    </span>
+                  </div>
                 </button>
               );
             })}
@@ -281,9 +301,12 @@ function BrandCarousel({ brands, selectedRunId, onSelectRun }) {
   const prev = () => setIndex((i) => (i - 1 + brands.length) % brands.length);
   const next = () => setIndex((i) => (i + 1) % brands.length);
   const getCard = (offset) => brands[(index + offset + brands.length) % brands.length];
+  const maxIndex = Math.max(0, brands.length - 1);
+
+  const desktopOffsets = [-2, -1, 0, 1, 2];
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-5">
       <div className="flex items-center gap-3">
         <button
           type="button"
@@ -291,18 +314,31 @@ function BrandCarousel({ brands, selectedRunId, onSelectRun }) {
           className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-slate-200 bg-white text-xl text-slate-500 shadow transition hover:bg-slate-50"
         >{'<'}</button>
 
-        <div className="hidden flex-1 grid-cols-3 items-center gap-4 lg:grid">
-          <div className="cursor-pointer" onClick={prev}>
-            <BrandCarouselCard brand={getCard(-1)} active={false} selectedRunId={selectedRunId} onSelectRun={onSelectRun} />
-          </div>
-          <BrandCarouselCard brand={getCard(0)} active={true} selectedRunId={selectedRunId} onSelectRun={onSelectRun} />
-          <div className="cursor-pointer" onClick={next}>
-            <BrandCarouselCard brand={getCard(1)} active={false} selectedRunId={selectedRunId} onSelectRun={onSelectRun} />
-          </div>
+        <div className="hidden flex-1 grid-cols-5 items-stretch gap-3 lg:grid perspective-[1400px]">
+          {desktopOffsets.map((offset) => {
+            const isActive = offset === 0;
+            const brand = getCard(offset);
+            const onEdge = offset < 0 ? prev : next;
+            return (
+              <div
+                key={`${brand._id || brand.code}-${offset}`}
+                className={!isActive ? 'cursor-pointer' : ''}
+                onClick={!isActive ? onEdge : undefined}
+              >
+                <BrandCarouselCard
+                  brand={brand}
+                  active={isActive}
+                  depth={Math.abs(offset)}
+                  selectedRunId={selectedRunId}
+                  onSelectRun={onSelectRun}
+                />
+              </div>
+            );
+          })}
         </div>
 
         <div className="flex-1 lg:hidden">
-          <BrandCarouselCard brand={getCard(0)} active={true} selectedRunId={selectedRunId} onSelectRun={onSelectRun} />
+          <BrandCarouselCard brand={getCard(0)} active={true} depth={0} selectedRunId={selectedRunId} onSelectRun={onSelectRun} />
         </div>
 
         <button
@@ -312,20 +348,22 @@ function BrandCarousel({ brands, selectedRunId, onSelectRun }) {
         >{'>'}</button>
       </div>
 
-      <div className="flex justify-center gap-1.5">
-        {brands.map((_, i) => (
-          <button
-            key={i}
-            type="button"
-            onClick={() => setIndex(i)}
-            className="rounded-full transition-all duration-300"
+      <div className="mx-auto mt-12 w-full max-w-xl px-4">
+        <div className="rounded-full border border-slate-200 bg-white px-3 py-2 shadow-sm">
+          <input
+            type="range"
+            min={0}
+            max={maxIndex}
+            step={1}
+            value={index}
+            onChange={(e) => setIndex(Number(e.target.value))}
+            aria-label="Carousel slider"
+            className="h-2 w-full cursor-pointer appearance-none rounded-full [&::-moz-range-thumb]:h-4 [&::-moz-range-thumb]:w-4 [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:border-0 [&::-moz-range-thumb]:bg-slate-500 [&::-moz-range-thumb]:shadow [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-slate-500 [&::-webkit-slider-thumb]:shadow"
             style={{
-              width: i === index ? '20px' : '8px',
-              height: '8px',
-              backgroundColor: i === index ? '#6366f1' : '#cbd5e1',
+              background: '#e2e8f0',
             }}
           />
-        ))}
+        </div>
       </div>
     </div>
   );
@@ -384,7 +422,7 @@ function UserDashboard({ username = 'User', brands = [], totalDomains = 0 }) {
       </div>
 
       {/* Carousel */}
-      <div className="rounded-2xl border border-slate-100 bg-white px-6 py-5 shadow-sm">
+      <div className="rounded-2xl border border-slate-100 bg-white px-6 py-5 shadow-sm min-h-[680px]">
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
           <div>
             <h2 className="font-bold text-slate-800">Brand Status Overview</h2>
@@ -408,11 +446,13 @@ function UserDashboard({ username = 'User', brands = [], totalDomains = 0 }) {
             </p>
           </div>
         ) : (
-          <BrandCarousel
-            brands={filteredBrands}
-            selectedRunId={selectedRunId}
-            onSelectRun={handleSelectRun}
-          />
+          <div className="mt-8">
+            <BrandCarousel
+              brands={filteredBrands}
+              selectedRunId={selectedRunId}
+              onSelectRun={handleSelectRun}
+            />
+          </div>
         )}
       </div>
     </section>
