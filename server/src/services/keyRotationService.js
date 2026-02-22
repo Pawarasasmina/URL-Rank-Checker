@@ -56,22 +56,7 @@ const extractRemainingFromBody = (payload = {}) => {
 };
 
 const createKeyRotationService = () => {
-  const getNextActiveKeys = (settings) => {
-    const activeKeys = (settings.serpApiKeys || []).filter((item) => item.isActive);
-    if (!activeKeys.length) return [];
-
-    const cursor = settings.activeKeyCursor || 0;
-    const offset = cursor % activeKeys.length;
-    return [...activeKeys.slice(offset), ...activeKeys.slice(0, offset)];
-  };
-
-  const markCursor = (settings, usedKeyId) => {
-    const activeKeys = (settings.serpApiKeys || []).filter((item) => item.isActive);
-    const index = activeKeys.findIndex((item) => item._id.toString() === usedKeyId.toString());
-    if (index === -1) return;
-
-    settings.activeKeyCursor = (index + 1) % Math.max(activeKeys.length, 1);
-  };
+  const getActiveKeys = (settings) => (settings.serpApiKeys || []).filter((item) => item.isActive);
 
   const withRotatingKey = async (executor) => {
     const settings = await AdminSettings.findOne();
@@ -79,8 +64,8 @@ const createKeyRotationService = () => {
       throw new Error('Admin settings missing');
     }
 
-    const candidateKeys = getNextActiveKeys(settings);
-    if (!candidateKeys.length) {
+    const activeKeys = getActiveKeys(settings);
+    if (!activeKeys.length) {
       const error = new Error('No active Serper API keys configured');
       error.statusCode = 400;
       throw error;
@@ -88,7 +73,9 @@ const createKeyRotationService = () => {
 
     let lastError = null;
 
-    for (const keyEntry of candidateKeys) {
+    for (let index = 0; index < activeKeys.length; index += 1) {
+      const keyEntry = activeKeys[index];
+      settings.activeKeyCursor = index;
       try {
         const response = await executor({ key: keyEntry.key, keyName: keyEntry.name });
 
@@ -98,8 +85,6 @@ const createKeyRotationService = () => {
         keyEntry.exhaustedAt = null;
         keyEntry.lastKnownRemaining =
           extractRemainingTokens(response.headers || {}) ?? extractRemainingFromBody(response.data || {});
-
-        markCursor(settings, keyEntry._id);
         await settings.save();
 
         return {
@@ -120,9 +105,13 @@ const createKeyRotationService = () => {
 
         if (RATE_LIMIT_STATUSES.has(error.response?.status)) {
           keyEntry.exhaustedAt = new Date();
+          await settings.save();
+          continue;
         }
 
         await settings.save();
+        // Do not skip to another key on non-credit errors.
+        throw error;
       }
     }
 

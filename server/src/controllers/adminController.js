@@ -281,6 +281,14 @@ const getAdminDashboard = async (req, res, next) => {
       })
     );
 
+    const activeKeys = (settings.serpApiKeys || []).filter((item) => item.isActive);
+    const cursor = Number(settings.activeKeyCursor) || 0;
+    const rotationIndex = activeKeys.length ? cursor % activeKeys.length : -1;
+    const rotationKey = rotationIndex >= 0 ? activeKeys[rotationIndex] : null;
+    const lastUsedKey = (settings.serpApiKeys || [])
+      .filter((item) => item.lastUsedAt)
+      .sort((a, b) => new Date(b.lastUsedAt) - new Date(a.lastUsedAt))[0] || null;
+
     const schedulerStatus = req.app.locals.autoCheckScheduler?.getStatus?.() || null;
     const backupSchedulerStatus = req.app.locals.backupScheduler?.getStatus?.() || null;
     const backupRuns = await BackupRun.find({})
@@ -317,6 +325,26 @@ const getAdminDashboard = async (req, res, next) => {
       schedulerStatus,
       backupSchedulerStatus,
       backupRuns,
+      serperRuntime: {
+        activeKeyCount: activeKeys.length,
+        activeCursor: cursor,
+        rotationKey: rotationKey
+          ? {
+              _id: rotationKey._id,
+              name: rotationKey.name,
+              lastUsedAt: rotationKey.lastUsedAt || null,
+              lastError: rotationKey.lastError || '',
+            }
+          : null,
+        lastUsedKey: lastUsedKey
+          ? {
+              _id: lastUsedKey._id,
+              name: lastUsedKey.name,
+              lastUsedAt: lastUsedKey.lastUsedAt || null,
+              lastError: lastUsedKey.lastError || '',
+            }
+          : null,
+      },
       autoCheckSlotStatuses,
     });
   } catch (error) {

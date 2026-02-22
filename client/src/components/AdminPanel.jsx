@@ -204,6 +204,7 @@ function AdminPanel({
   const settings = dashboard?.settings;
   const tokenRows = dashboard?.tokens || [];
   const schedulerStatus = dashboard?.schedulerStatus;
+  const serperRuntime = dashboard?.serperRuntime || null;
   const autoState = getAutoState(settings, schedulerStatus);
   const progress = schedulerStatus?.progress || { processedBrands: 0, totalBrands: 0, brandCode: null };
   const selectedIntervalValue = String(getIntervalMinutes(settings));
@@ -600,6 +601,18 @@ function AdminPanel({
             <span className="rounded-full bg-violet-100 px-3 py-1 text-[11px] font-semibold uppercase tracking-wide text-violet-700">
               API Access
             </span>
+          </div>
+
+          <div className="mt-3 grid gap-2 rounded-xl border border-violet-200 bg-white/90 p-3 text-xs text-slate-700 sm:grid-cols-2 lg:grid-cols-4">
+            <p>Active Keys: {serperRuntime?.activeKeyCount ?? 0}</p>
+            <p>Rotation Cursor: {serperRuntime?.activeCursor ?? 0}</p>
+            <p>Running Key: {serperRuntime?.rotationKey?.name || '-'}</p>
+            <p>Last Used Key: {serperRuntime?.lastUsedKey?.name || '-'}</p>
+            <p>Running Key Last Used: {formatDateTime(serperRuntime?.rotationKey?.lastUsedAt)}</p>
+            <p>Last Used At: {formatDateTime(serperRuntime?.lastUsedKey?.lastUsedAt)}</p>
+            <p className="sm:col-span-2 lg:col-span-4">
+              Running Key Error: {serperRuntime?.rotationKey?.lastError || '-'}
+            </p>
           </div>
 
           <div className="mt-3 grid gap-2 md:grid-cols-[180px_1fr_auto]">
