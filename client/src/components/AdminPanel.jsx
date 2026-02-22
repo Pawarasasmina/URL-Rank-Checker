@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 
 const INDONESIA_TIME_ZONE = 'Asia/Jakarta';
 
@@ -119,6 +119,16 @@ const buildSchedulePreview = (settings, schedulerStatus, persistedSlotStatuses =
 };
 
 const INTERVAL_OPTIONS = [15, 30, 60];
+const BACKUP_FORMAT_OPTIONS = [
+  { value: 'json', label: 'JSON (.json)' },
+  { value: 'ndjson', label: 'NDJSON (.ndjson)' },
+];
+const BACKUP_FREQUENCY_OPTIONS = [
+  { value: 'daily', label: 'Daily' },
+  { value: 'twice_weekly', label: 'Twice Weekly' },
+  { value: 'weekly', label: 'Weekly' },
+  { value: 'monthly', label: 'Monthly' },
+];
 
 const getAutoState = (settings, schedulerStatus) => {
   if (schedulerStatus?.isRunning && schedulerStatus?.stopRequested) {
@@ -176,6 +186,7 @@ function AdminPanel({
   dashboard,
   loading,
   error,
+  notice,
   onSaveSchedule,
   onStartAutoCheck,
   onStopRun,
@@ -183,6 +194,12 @@ function AdminPanel({
   onUpdateKey,
   onDeleteKey,
   runActionLoading,
+  onSaveBackupSettings,
+  onRunBackupNow,
+  backupActionLoading,
+  onTestBackupTelegram,
+  backupTestLoading,
+  sectionView = 'all',
 }) {
   const settings = dashboard?.settings;
   const tokenRows = dashboard?.tokens || [];
@@ -194,15 +211,46 @@ function AdminPanel({
 
   const [newKeyName, setNewKeyName] = useState('');
   const [newKeyValue, setNewKeyValue] = useState('');
+  const [editingKeyId, setEditingKeyId] = useState('');
+  const [editingKeyName, setEditingKeyName] = useState('');
+  const [editingKeyValue, setEditingKeyValue] = useState('');
+  const [backupChatIdsText, setBackupChatIdsText] = useState('');
+  const [backupBotTokenInput, setBackupBotTokenInput] = useState('');
+  const [isEditingBotToken, setIsEditingBotToken] = useState(false);
+
+  const backupSchedulerStatus = dashboard?.backupSchedulerStatus;
+  const backupRuns = dashboard?.backupRuns || [];
+  const backupEnabled = !!settings?.backupEnabled;
+  const backupTimeWib = settings?.backupTimeWib || '00:00';
+  const backupFrequency = settings?.backupFrequency || 'daily';
+  const backupTimeframeDays = Number(settings?.backupTimeframeDays) || 1;
+  const backupFormat = settings?.backupFormat || 'json';
+  const backupBotTokenConfigured = !!settings?.backupTelegramBotTokenConfigured;
+  const backupBotTokenMasked = settings?.backupTelegramBotTokenMasked || '';
+  const showRankSection = sectionView === 'all' || sectionView === 'rank-check';
+  const showBackupSection = sectionView === 'all' || sectionView === 'backup';
+  const showApiSection = sectionView === 'all' || sectionView === 'rank-check';
+
+  const currentChatIds = (settings?.backupTelegramChatIds || []).join(', ');
+  useEffect(() => {
+    setBackupChatIdsText(currentChatIds);
+  }, [currentChatIds]);
 
   return (
     <section className="p-4 lg:p-6">
-      <div className="space-y-4">
-        <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
-          <h2 className="text-lg font-semibold">Auto Check Configuration</h2>
+      <div className="space-y-5">
+        {showRankSection && (
+        <div className="rounded-2xl border border-blue-200 bg-gradient-to-br from-blue-50 via-white to-cyan-50 p-5 shadow-sm">
+          <div className="flex items-center justify-between gap-3">
+            <h2 className="text-lg font-semibold text-slate-900">Auto Check Configuration</h2>
+            <span className="rounded-full bg-blue-100 px-3 py-1 text-[11px] font-semibold uppercase tracking-wide text-blue-700">
+              Automation
+            </span>
+          </div>
 
           {loading && <p className="mt-3 text-sm text-slate-500">Loading settings...</p>}
           {error && <p className="mt-3 rounded bg-red-50 p-2 text-sm text-red-700">{error}</p>}
+          {notice && <p className="mt-3 rounded bg-blue-50 p-2 text-sm text-blue-700">{notice}</p>}
 
           {settings && (
             <div className="mt-4 grid items-end gap-3 lg:grid-cols-[220px_auto]">
@@ -230,7 +278,7 @@ function AdminPanel({
                   type="button"
                   onClick={onStopRun}
                   disabled={runActionLoading || schedulerStatus?.stopRequested}
-                  className="h-fit rounded-md bg-rose-600 px-4 py-2 text-sm font-semibold text-white hover:bg-rose-700 disabled:cursor-not-allowed disabled:opacity-60"
+                  className="h-fit rounded-xl bg-rose-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-rose-700 disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   {schedulerStatus?.stopRequested ? 'Stopping...' : runActionLoading ? 'Processing...' : 'Stop Auto Check'}
                 </button>
@@ -239,7 +287,7 @@ function AdminPanel({
                   type="button"
                   onClick={onStartAutoCheck}
                   disabled={runActionLoading}
-                  className="h-fit rounded-md bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60"
+                  className="h-fit rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   {runActionLoading ? 'Processing...' : 'Run Auto Check'}
                 </button>
@@ -248,7 +296,7 @@ function AdminPanel({
           )}
 
           {settings && (
-            <div className={`mt-4 rounded-md border p-4 text-sm ${autoState.panelClass}`}>
+            <div className={`mt-4 rounded-xl border p-4 text-sm ${autoState.panelClass}`}>
               <div className="flex flex-wrap items-center gap-2">
                 <span className={`rounded-full px-2.5 py-1 text-xs font-bold ${autoState.badgeClass}`}>
                   {autoState.title}
@@ -279,7 +327,7 @@ function AdminPanel({
                 <p>Current brand: {schedulerStatus?.isRunning ? progress.brandCode || '-' : '-'}</p>
               </div>
 
-                <div className="mt-3 rounded-md border border-slate-200 bg-white p-3">
+                <div className="mt-3 rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
                 <p className="text-xs font-semibold uppercase tracking-wide text-slate-600">Schedule Window (WIB: Previous 2 + Next 12 Hours From Now)</p>
                 <div className="mt-2 flex flex-wrap gap-2 text-[11px] text-slate-600">
                   <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-emerald-700">Success</span>
@@ -291,7 +339,7 @@ function AdminPanel({
                 </div>
                 <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6">
                   {schedulePreview.map((item) => (
-                    <div key={item.key} className="rounded-md border border-slate-200 bg-slate-50 p-2">
+                    <div key={item.key} className="rounded-lg border border-slate-200 bg-slate-50 p-2 shadow-sm">
                       <p className="text-xs font-semibold text-slate-700">{formatClock(item.at)}</p>
                       <span
                         title={item.status === 'Failure' ? item.tooltip : ''}
@@ -322,22 +370,250 @@ function AdminPanel({
             </div>
           )}
         </div>
+        )}
 
-        <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
-          <h2 className="text-lg font-semibold">Serper API Keys</h2>
+        {showBackupSection && (
+        <div className="rounded-2xl border border-emerald-200 bg-gradient-to-br from-emerald-50 via-white to-teal-50 p-5 shadow-sm">
+          <div className="flex items-center justify-between gap-3">
+            <h2 className="text-lg font-semibold text-slate-900">Telegram Backup Plan</h2>
+            <span className="rounded-full bg-emerald-100 px-3 py-1 text-[11px] font-semibold uppercase tracking-wide text-emerald-700">
+              Backup
+            </span>
+          </div>
+          <p className="mt-1 text-xs text-slate-500">
+            Recommended setup for large data: daily at 00:00 WIB, NDJSON format.
+          </p>
+
+          {settings && (
+            <div className="mt-4 grid gap-3 md:grid-cols-2 lg:grid-cols-3">
+              <div>
+                <label className="block text-xs font-semibold uppercase tracking-wide text-slate-600">Backup Frequency</label>
+                <select
+                  value={backupFrequency}
+                  onChange={(e) => onSaveBackupSettings({ backupFrequency: e.target.value })}
+                  className="mt-1 w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm shadow-sm outline-none transition focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100"
+                >
+                  {BACKUP_FREQUENCY_OPTIONS.map((item) => (
+                    <option key={item.value} value={item.value}>
+                      {item.label}
+                    </option>
+                  ))}
+                </select>
+                {backupFrequency === 'twice_weekly' && (
+                  <p className="mt-1 text-[11px] text-slate-500">Twice weekly runs alternate every 3 and 4 days.</p>
+                )}
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold uppercase tracking-wide text-slate-600">Backup Time (WIB)</label>
+                <input
+                  type="time"
+                  value={backupTimeWib}
+                  onChange={(e) => onSaveBackupSettings({ backupTimeWib: e.target.value })}
+                  className="mt-1 w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm shadow-sm outline-none transition focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold uppercase tracking-wide text-slate-600">Backup Format</label>
+                <select
+                  value={backupFormat}
+                  onChange={(e) => onSaveBackupSettings({ backupFormat: e.target.value })}
+                  className="mt-1 w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm shadow-sm outline-none transition focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100"
+                >
+                  {BACKUP_FORMAT_OPTIONS.map((item) => (
+                    <option key={item.value} value={item.value}>
+                      {item.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="md:col-span-2">
+                <label className="block text-xs font-semibold uppercase tracking-wide text-slate-600">
+                  Telegram Bot Token / Bot ID
+                </label>
+                <div className="mt-1 flex gap-2">
+                  <input
+                    type="password"
+                    value={backupBotTokenInput}
+                    onChange={(e) => setBackupBotTokenInput(e.target.value)}
+                    placeholder={
+                      backupBotTokenConfigured
+                        ? isEditingBotToken
+                          ? 'Enter replacement bot token'
+                          : `Configured: ${backupBotTokenMasked}`
+                        : '123456789:AA...'
+                    }
+                    className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm shadow-sm outline-none transition focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onSaveBackupSettings({ backupTelegramBotToken: backupBotTokenInput });
+                      setBackupBotTokenInput('');
+                      setIsEditingBotToken(false);
+                    }}
+                    className="rounded-xl bg-slate-900 px-3 py-2.5 text-xs font-semibold text-white shadow-sm hover:bg-slate-800"
+                  >
+                    {isEditingBotToken ? 'Update Bot' : 'Save Bot'}
+                  </button>
+                </div>
+                {backupBotTokenConfigured && (
+                  <div className="mt-2 flex flex-wrap items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-800">
+                    <span className="font-semibold">Saved Bot:</span>
+                    <span className="font-mono">{backupBotTokenMasked}</span>
+                    <button
+                      type="button"
+                      onClick={() => setIsEditingBotToken(true)}
+                      className="rounded bg-white px-2 py-1 font-semibold text-slate-700 shadow-sm hover:bg-slate-50"
+                    >
+                      Edit
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        onSaveBackupSettings({ backupTelegramBotToken: '' });
+                        setBackupBotTokenInput('');
+                        setIsEditingBotToken(false);
+                      }}
+                      className="rounded bg-rose-100 px-2 py-1 font-semibold text-rose-700 hover:bg-rose-200"
+                    >
+                      Delete
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              <div className="md:col-span-2">
+                <label className="block text-xs font-semibold uppercase tracking-wide text-slate-600">
+                  Telegram Chat IDs (comma separated)
+                </label>
+                <div className="mt-1 flex gap-2">
+                  <input
+                    value={backupChatIdsText}
+                    onChange={(e) => setBackupChatIdsText(e.target.value)}
+                    placeholder="-1001234567890, 987654321"
+                    className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm shadow-sm outline-none transition focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => onSaveBackupSettings({ backupTelegramChatIds: backupChatIdsText })}
+                    className="rounded-xl bg-slate-900 px-3 py-2.5 text-xs font-semibold text-white shadow-sm hover:bg-slate-800"
+                  >
+                    Save IDs
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => onTestBackupTelegram(backupChatIdsText)}
+                    disabled={backupTestLoading}
+                    className="rounded-xl bg-indigo-600 px-3 py-2.5 text-xs font-semibold text-white shadow-sm hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {backupTestLoading ? 'Testing...' : 'Test Telegram'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {settings && (
+            <div className="mt-4 flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={() => onSaveBackupSettings({ backupEnabled: !backupEnabled })}
+                className={`rounded-xl px-4 py-2.5 text-sm font-semibold text-white shadow-sm ${
+                  backupEnabled ? 'bg-rose-600 hover:bg-rose-700' : 'bg-emerald-600 hover:bg-emerald-700'
+                }`}
+              >
+                {backupEnabled ? 'Stop Backup Schedule' : 'Run Backup Schedule'}
+              </button>
+              <button
+                type="button"
+                onClick={onRunBackupNow}
+                disabled={backupActionLoading || backupSchedulerStatus?.isRunning}
+                className="rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {backupActionLoading || backupSchedulerStatus?.isRunning ? 'Running...' : 'Run Backup Now'}
+              </button>
+            </div>
+          )}
+
+          {settings && (
+            <div className="mt-4 rounded-xl border border-slate-200 bg-white/80 p-3 text-xs text-slate-700 shadow-sm">
+              <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+                <p>Backup Schedule: {backupEnabled ? 'Running' : 'Stopped'}</p>
+                <p>Next Backup: {formatDateTime(settings.nextBackupAt)}</p>
+                <p>Last Backup: {formatDateTime(settings.lastBackupAt)}</p>
+                <p>
+                  Data Window: last {backupTimeframeDays} day{backupTimeframeDays > 1 ? 's' : ''}
+                </p>
+                <p>Last Status: {settings.lastBackupStatus || 'idle'}</p>
+              </div>
+              {settings.lastBackupError && (
+                <p className="mt-2 rounded bg-red-50 p-2 text-red-700">Last error: {settings.lastBackupError}</p>
+              )}
+            </div>
+          )}
+
+          <div className="mt-4 overflow-auto rounded-xl border border-slate-200 bg-white shadow-sm">
+            <table className="min-w-full divide-y divide-slate-200 text-xs">
+              <thead>
+                <tr>
+                  <th className="px-2 py-2 text-left">Time</th>
+                  <th className="px-2 py-2 text-left">Source</th>
+                  <th className="px-2 py-2 text-left">Status</th>
+                  <th className="px-2 py-2 text-left">Rows</th>
+                  <th className="px-2 py-2 text-left">Files</th>
+                  <th className="px-2 py-2 text-left">By</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {backupRuns.map((item) => (
+                  <tr key={item._id}>
+                    <td className="px-2 py-2">{formatDateTime(item.createdAt)}</td>
+                    <td className="px-2 py-2 capitalize">{item.source || '-'}</td>
+                    <td className="px-2 py-2">
+                      <span
+                        className={`rounded-full px-2 py-0.5 ${
+                          item.status === 'success' ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'
+                        }`}
+                      >
+                        {item.status || '-'}
+                      </span>
+                    </td>
+                    <td className="px-2 py-2">{item.totalRecords ?? 0}</td>
+                    <td className="px-2 py-2">{item.totalFiles ?? 0}</td>
+                    <td className="px-2 py-2">{item.triggeredBy?.username || '-'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            {backupRuns.length === 0 && <p className="mt-2 text-xs text-slate-500">No backup runs yet.</p>}
+          </div>
+        </div>
+        )}
+
+        {showApiSection && (
+        <div className="rounded-2xl border border-violet-200 bg-gradient-to-br from-violet-50 via-white to-indigo-50 p-5 shadow-sm">
+          <div className="flex items-center justify-between gap-3">
+            <h2 className="text-lg font-semibold text-slate-900">Serper API Keys</h2>
+            <span className="rounded-full bg-violet-100 px-3 py-1 text-[11px] font-semibold uppercase tracking-wide text-violet-700">
+              API Access
+            </span>
+          </div>
 
           <div className="mt-3 grid gap-2 md:grid-cols-[180px_1fr_auto]">
             <input
               value={newKeyName}
               onChange={(e) => setNewKeyName(e.target.value)}
               placeholder="Key name"
-              className="rounded-md border border-slate-300 px-3 py-2 text-sm"
+              className="rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm shadow-sm outline-none transition focus:border-violet-400 focus:ring-2 focus:ring-violet-100"
             />
             <input
               value={newKeyValue}
               onChange={(e) => setNewKeyValue(e.target.value)}
               placeholder="API key"
-              className="rounded-md border border-slate-300 px-3 py-2 text-sm"
+              className="rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm shadow-sm outline-none transition focus:border-violet-400 focus:ring-2 focus:ring-violet-100"
             />
             <button
               type="button"
@@ -346,13 +622,13 @@ function AdminPanel({
                 setNewKeyName('');
                 setNewKeyValue('');
               }}
-              className="rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700"
+              className="rounded-xl bg-violet-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-violet-700"
             >
               Add Key
             </button>
           </div>
 
-          <div className="mt-4 overflow-auto">
+          <div className="mt-4 overflow-auto rounded-xl border border-slate-200 bg-white shadow-sm">
             <table className="min-w-full divide-y divide-slate-200 text-sm">
               <thead>
                 <tr>
@@ -373,11 +649,33 @@ function AdminPanel({
                 {tokenRows.map((item) => {
                   const maskedKey =
                     (settings?.serpApiKeys || []).find((key) => key._id === item._id)?.maskedKey || '***';
+                  const isEditing = editingKeyId === item._id;
 
                   return (
                     <tr key={item._id}>
-                      <td className="px-3 py-2">{item.name}</td>
-                      <td className="px-3 py-2 font-mono text-xs">{maskedKey}</td>
+                      <td className="px-3 py-2">
+                        {isEditing ? (
+                          <input
+                            value={editingKeyName}
+                            onChange={(e) => setEditingKeyName(e.target.value)}
+                            className="w-full rounded-md border border-slate-300 px-2 py-1 text-xs"
+                          />
+                        ) : (
+                          item.name
+                        )}
+                      </td>
+                      <td className="px-3 py-2 font-mono text-xs">
+                        {isEditing ? (
+                          <input
+                            value={editingKeyValue}
+                            onChange={(e) => setEditingKeyValue(e.target.value)}
+                            placeholder="Enter new API key"
+                            className="w-full rounded-md border border-slate-300 px-2 py-1 text-xs"
+                          />
+                        ) : (
+                          maskedKey
+                        )}
+                      </td>
                       <td className="px-3 py-2">{item.remainingDisplay ?? '-'}</td>
                       <td className="px-3 py-2">{item.monthlyLimit ?? '-'}</td>
                       <td className="px-3 py-2">{item.totalRequests ?? 0}</td>
@@ -388,20 +686,67 @@ function AdminPanel({
                       <td className="px-3 py-2">{item.isActive ? 'Yes' : 'No'}</td>
                       <td className="px-3 py-2">
                         <div className="flex gap-2">
-                          <button
-                            type="button"
-                            onClick={() => onUpdateKey(item._id, { isActive: !item.isActive })}
-                            className="rounded bg-slate-100 px-2 py-1 text-xs"
-                          >
-                            {item.isActive ? 'Disable' : 'Enable'}
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => onDeleteKey(item._id)}
-                            className="rounded bg-red-100 px-2 py-1 text-xs text-red-700"
-                          >
-                            Delete
-                          </button>
+                          {isEditing ? (
+                            <>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const payload = {
+                                    name: editingKeyName.trim(),
+                                  };
+                                  if (editingKeyValue.trim()) {
+                                    payload.key = editingKeyValue.trim();
+                                  }
+                                  onUpdateKey(item._id, payload);
+                                  setEditingKeyId('');
+                                  setEditingKeyName('');
+                                  setEditingKeyValue('');
+                                }}
+                                className="rounded bg-emerald-100 px-2 py-1 text-xs text-emerald-700"
+                              >
+                                Save
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setEditingKeyId('');
+                                  setEditingKeyName('');
+                                  setEditingKeyValue('');
+                                }}
+                                className="rounded bg-slate-100 px-2 py-1 text-xs"
+                              >
+                                Cancel
+                              </button>
+                            </>
+                          ) : (
+                            <>
+                              <button
+                                type="button"
+                                onClick={() => onUpdateKey(item._id, { isActive: !item.isActive })}
+                                className="rounded bg-slate-100 px-2 py-1 text-xs"
+                              >
+                                {item.isActive ? 'Disable' : 'Enable'}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setEditingKeyId(item._id);
+                                  setEditingKeyName(item.name || '');
+                                  setEditingKeyValue('');
+                                }}
+                                className="rounded bg-blue-100 px-2 py-1 text-xs text-blue-700"
+                              >
+                                Edit
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => onDeleteKey(item._id)}
+                                className="rounded bg-red-100 px-2 py-1 text-xs text-red-700"
+                              >
+                                Delete
+                              </button>
+                            </>
+                          )}
                         </div>
                       </td>
                     </tr>
@@ -421,6 +766,7 @@ function AdminPanel({
             )}
           </div>
         </div>
+        )}
       </div>
     </section>
   );

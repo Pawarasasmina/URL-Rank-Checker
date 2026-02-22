@@ -127,6 +127,12 @@ export const updateAdminSchedule = (payload) =>
     body: JSON.stringify(payload),
   });
 
+export const updateAdminBackupSettings = (payload) =>
+  request('/api/admin/settings/backup', {
+    method: 'PATCH',
+    body: JSON.stringify(payload),
+  });
+
 export const addAdminApiKey = (payload) =>
   request('/api/admin/settings/keys', {
     method: 'POST',
@@ -152,4 +158,15 @@ export const runAutoNow = () =>
 export const stopAutoRun = () =>
   request('/api/admin/stop-run', {
     method: 'POST',
+  });
+
+export const runBackupNow = () =>
+  request('/api/admin/backup/run-now', {
+    method: 'POST',
+  });
+
+export const testAdminBackupTelegram = (payload) =>
+  request('/api/admin/backup/test-telegram', {
+    method: 'POST',
+    body: JSON.stringify(payload || {}),
   });

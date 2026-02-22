@@ -1,5 +1,20 @@
 import { useEffect, useState } from 'react';
 
+const INDONESIA_TIME_ZONE = 'Asia/Jakarta';
+const formatDateTimeWib = (value) => {
+  if (!value) return '-';
+  return new Date(value).toLocaleString('id-ID', {
+    timeZone: INDONESIA_TIME_ZONE,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false,
+  });
+};
+
 const toExternalUrl = (domain) => {
   if (!domain) return '#';
   if (domain === 'AUTO-CHECK') return '#';
@@ -73,7 +88,7 @@ function DomainActivityLogPanel({ onLoadLogs }) {
               {logs.map((item) => (
                 <tr key={item._id}>
                   <td className="px-3 py-2 text-xs text-slate-500">
-                    {item.createdAt ? new Date(item.createdAt).toLocaleString() : '-'}
+                    {formatDateTimeWib(item.createdAt)}
                   </td>
                   <td className="px-3 py-2">
                     <span

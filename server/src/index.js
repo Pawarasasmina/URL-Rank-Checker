@@ -9,6 +9,7 @@ const { parseEnvKeys, ensureSettings, applyBaselineFromEnv } = require('./servic
 const { createKeyRotationService } = require('./services/keyRotationService');
 const { createSerpRunService } = require('./services/serpRunService');
 const { createAutoCheckScheduler } = require('./services/autoCheckScheduler');
+const { createBackupScheduler } = require('./services/backupScheduler');
 const { ensureInitialAdmin } = require('./services/userBootstrapService');
 
 const bootstrap = async () => {
@@ -58,6 +59,13 @@ const bootstrap = async () => {
   });
   app.locals.autoCheckScheduler = scheduler;
   scheduler.start();
+
+  const backupScheduler = createBackupScheduler({
+    onStatusChange: () => emitAdminUpdate({ source: 'backup-scheduler' }),
+    telegramBotToken: env.telegramBotToken,
+  });
+  app.locals.backupScheduler = backupScheduler;
+  backupScheduler.start();
 
   server.listen(env.port, () => {
     console.log(`Server running on port ${env.port}`);

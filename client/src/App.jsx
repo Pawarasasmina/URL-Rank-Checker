@@ -33,10 +33,13 @@ import {
   setAuthToken,
   stopAutoRun,
   updateAdminApiKey,
+  updateAdminBackupSettings,
   updateAdminSchedule,
   updateUser,
   updateMyPassword,
   updateMyProfile,
+  runBackupNow,
+  testAdminBackupTelegram,
 } from './services/api';
 
 function App() {
@@ -54,6 +57,8 @@ function App() {
   const [authReady, setAuthReady] = useState(false);
   const [currentUser, setCurrentUser] = useState(null);
   const [tab, setTab] = useState('dashboard');
+  const [adminConfigView, setAdminConfigView] = useState('all');
+  const [adminMenuOpen, setAdminMenuOpen] = useState(false);
 
   const [brands, setBrands] = useState([]);
   const [selectedBrand, setSelectedBrand] = useState(null);
@@ -64,7 +69,10 @@ function App() {
   const [adminDashboard, setAdminDashboard] = useState(null);
   const [adminLoading, setAdminLoading] = useState(false);
   const [adminError, setAdminError] = useState('');
+  const [adminNotice, setAdminNotice] = useState('');
   const [autoRunActionLoading, setAutoRunActionLoading] = useState(false);
+  const [backupActionLoading, setBackupActionLoading] = useState(false);
+  const [backupTestLoading, setBackupTestLoading] = useState(false);
   const [wibClock, setWibClock] = useState(getWibClock());
 
   // Dashboard enriched brands state
@@ -198,6 +206,7 @@ function App() {
     setResultsByBrand({});
     setDashboardBrands([]);
     setTab('dashboard');
+    setAdminConfigView('all');
   };
 
   const runCheck = async ({ brandId, query, country, isMobile }) => {
@@ -217,6 +226,7 @@ function App() {
     if (!isAdmin) return;
     if (showLoader) setAdminLoading(true);
     setAdminError('');
+    setAdminNotice('');
     try {
       const data = await getAdminDashboard();
       setAdminDashboard(data);
@@ -329,6 +339,45 @@ function App() {
     setCurrentUser(me);
   };
 
+  const saveBackupSettings = async (payload) => {
+    try {
+      setAdminNotice('');
+      await updateAdminBackupSettings(payload);
+      await refreshAdminDashboard();
+    } catch (err) {
+      setAdminError(err.message || 'Failed to update backup settings');
+    }
+  };
+
+  const triggerBackupNow = async () => {
+    setBackupActionLoading(true);
+    try {
+      setAdminNotice('');
+      await runBackupNow();
+      await refreshAdminDashboard();
+    } catch (err) {
+      setAdminError(err.message || 'Failed to start backup');
+    } finally {
+      setBackupActionLoading(false);
+    }
+  };
+
+  const triggerTestBackupTelegram = async (backupTelegramChatIds) => {
+    setBackupTestLoading(true);
+    try {
+      setAdminError('');
+      const result = await testAdminBackupTelegram({ backupTelegramChatIds });
+      setAdminNotice(
+        `Telegram test: ${result.okCount}/${result.total} successful${result.failCount ? `, ${result.failCount} failed` : ''}.`
+      );
+      await refreshAdminDashboard({ showLoader: false });
+    } catch (err) {
+      setAdminError(err.message || 'Failed to test Telegram bot/chat IDs');
+    } finally {
+      setBackupTestLoading(false);
+    }
+  };
+
   const handleAdminUpdateUser = (userId, payload) => updateUser(userId, payload);
   const handleAdminDeleteUser = (userId) => deleteUser(userId);
 
@@ -361,19 +410,71 @@ function App() {
         <header className="border-b border-slate-200 bg-white px-4 py-3 lg:px-6">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div className="flex flex-wrap gap-2">
-              {tabs.map((item) => (
-                <button
-                  key={item.id}
-                  type="button"
-                  onClick={() => setTab(item.id)}
-                  className={`rounded-md px-3 py-2 text-sm font-semibold ${tab === item.id
-                      ? 'bg-slate-900 text-white'
-                      : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-                    }`}
-                >
-                  {item.label}
-                </button>
-              ))}
+              {tabs.map((item) => {
+                if (item.id !== 'admin') {
+                  return (
+                    <button
+                      key={item.id}
+                      type="button"
+                      onClick={() => setTab(item.id)}
+                      className={`rounded-md px-3 py-2 text-sm font-semibold ${
+                        tab === item.id ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                      }`}
+                    >
+                      {item.label}
+                    </button>
+                  );
+                }
+
+                return (
+                  <div
+                    key={item.id}
+                    className="relative"
+                    onMouseEnter={() => setAdminMenuOpen(true)}
+                    onMouseLeave={() => setAdminMenuOpen(false)}
+                  >
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setAdminMenuOpen((prev) => !prev);
+                      }}
+                      className={`rounded-md px-3 py-2 text-sm font-semibold ${
+                        tab === item.id ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                      }`}
+                    >
+                      {item.label}
+                    </button>
+                    <div
+                      className={`absolute left-0 top-full z-20 min-w-[190px] rounded-lg border border-slate-200 bg-white p-1 shadow-lg transition ${
+                        adminMenuOpen ? 'visible opacity-100' : 'invisible opacity-0'
+                      }`}
+                    >
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setTab('admin');
+                          setAdminConfigView('rank-check');
+                          setAdminMenuOpen(false);
+                        }}
+                        className="block w-full rounded-md px-3 py-2 text-left text-xs font-semibold text-slate-700 hover:bg-slate-100"
+                      >
+                        Rank Check Config
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setTab('admin');
+                          setAdminConfigView('backup');
+                          setAdminMenuOpen(false);
+                        }}
+                        className="block w-full rounded-md px-3 py-2 text-left text-xs font-semibold text-slate-700 hover:bg-slate-100"
+                      >
+                        Backup Config
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
             <div className="flex items-center gap-2">
               <div className="flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-1.5">
@@ -438,6 +539,7 @@ function App() {
             dashboard={adminDashboard}
             loading={adminLoading}
             error={adminError}
+            notice={adminNotice}
             onSaveSchedule={saveSchedule}
             onAddKey={addApiKey}
             onUpdateKey={updateApiKey}
@@ -445,6 +547,12 @@ function App() {
             onStartAutoCheck={triggerStartAutoRun}
             onStopRun={triggerStopAutoRun}
             runActionLoading={autoRunActionLoading}
+            onSaveBackupSettings={saveBackupSettings}
+            onRunBackupNow={triggerBackupNow}
+            backupActionLoading={backupActionLoading}
+            onTestBackupTelegram={triggerTestBackupTelegram}
+            backupTestLoading={backupTestLoading}
+            sectionView={adminConfigView}
           />
         )}
 

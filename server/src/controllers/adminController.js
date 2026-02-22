@@ -1,5 +1,6 @@
 const SerpRun = require('../models/SerpRun');
 const { DomainActivityLog, DOMAIN_ACTIVITY_ACTIONS } = require('../models/DomainActivityLog');
+const { BackupRun } = require('../models/BackupRun');
 const { ensureSettings, getSanitizedSettings } = require('../services/adminSettingsService');
 const {
   MIN_INTERVAL_MINUTES,
@@ -9,6 +10,16 @@ const {
   isAllowedIntervalMinutes,
   getNextScheduledAt,
 } = require('../services/scheduleTimeService');
+const {
+  parseWibTime,
+  normalizeChatIds,
+  VALID_BACKUP_FORMATS,
+  VALID_BACKUP_FREQUENCIES,
+  getBackupIntervalDays,
+  getNextBackupAtFromNow,
+  getTelegramTokenFromSettings,
+  testTelegramTargets,
+} = require('../services/backupService');
 
 const toNumber = (value) => {
   const parsed = Number(value);
@@ -271,6 +282,11 @@ const getAdminDashboard = async (req, res, next) => {
     );
 
     const schedulerStatus = req.app.locals.autoCheckScheduler?.getStatus?.() || null;
+    const backupSchedulerStatus = req.app.locals.backupScheduler?.getStatus?.() || null;
+    const backupRuns = await BackupRun.find({})
+      .sort({ createdAt: -1 })
+      .limit(20)
+      .populate('triggeredBy', 'username email role');
     const intervalMinutes = hoursToMinutes(settings.checkIntervalHours || 1);
     const autoCheckLogWindowStart = new Date(Date.now() - 48 * 60 * 60 * 1000);
     const autoCheckLogs = await DomainActivityLog.find({
@@ -299,8 +315,80 @@ const getAdminDashboard = async (req, res, next) => {
         : null,
       recentRunCount: recentRuns.length,
       schedulerStatus,
+      backupSchedulerStatus,
+      backupRuns,
       autoCheckSlotStatuses,
     });
+  } catch (error) {
+    return next(error);
+  }
+};
+
+const updateBackupSettings = async (req, res, next) => {
+  try {
+    const settings = await ensureSettings();
+    const backupEnabled = req.body.backupEnabled;
+    const backupFrequencyRaw = req.body.backupFrequency;
+    const backupTimeWibRaw = req.body.backupTimeWib;
+    const backupFormatRaw = req.body.backupFormat;
+    const backupTelegramBotTokenRaw = req.body.backupTelegramBotToken;
+    const backupTelegramChatIdsRaw = req.body.backupTelegramChatIds;
+
+    if (typeof backupEnabled === 'boolean') {
+      settings.backupEnabled = backupEnabled;
+      settings.backupEveryDays = getBackupIntervalDays(settings.backupFrequency);
+      if (backupEnabled) {
+        settings.backupStartedBy = req.user?._id || settings.backupStartedBy || null;
+        settings.nextBackupAt = getNextBackupAtFromNow(new Date(), settings.backupTimeWib || '00:00');
+      } else {
+        settings.backupStartedBy = null;
+        settings.nextBackupAt = null;
+      }
+    }
+
+    if (backupFrequencyRaw !== undefined) {
+      const backupFrequency = String(backupFrequencyRaw).toLowerCase();
+      if (!VALID_BACKUP_FREQUENCIES.includes(backupFrequency)) {
+        return res.status(400).json({ error: 'backupFrequency must be one of: daily, twice_weekly, weekly, monthly' });
+      }
+      settings.backupFrequency = backupFrequency;
+      settings.backupEveryDays = getBackupIntervalDays(backupFrequency);
+      settings.backupTwiceWeeklyNextGapDays = 3;
+      if (settings.backupEnabled) {
+        settings.nextBackupAt = getNextBackupAtFromNow(new Date(), settings.backupTimeWib || '00:00');
+      }
+    }
+
+    if (backupTimeWibRaw !== undefined) {
+      const parsedTime = parseWibTime(String(backupTimeWibRaw || ''));
+      if (!parsedTime) {
+        return res.status(400).json({ error: 'backupTimeWib must be in HH:mm format' });
+      }
+      settings.backupTimeWib = parsedTime.normalized;
+      if (settings.backupEnabled) {
+        settings.nextBackupAt = getNextBackupAtFromNow(new Date(), settings.backupTimeWib);
+      }
+    }
+
+    if (backupFormatRaw !== undefined) {
+      const backupFormat = String(backupFormatRaw).toLowerCase();
+      if (!VALID_BACKUP_FORMATS.includes(backupFormat)) {
+        return res.status(400).json({ error: 'backupFormat must be one of: json, ndjson' });
+      }
+      settings.backupFormat = backupFormat;
+    }
+
+    if (backupTelegramBotTokenRaw !== undefined) {
+      settings.backupTelegramBotToken = String(backupTelegramBotTokenRaw || '').trim();
+    }
+
+    if (backupTelegramChatIdsRaw !== undefined) {
+      settings.backupTelegramChatIds = normalizeChatIds(backupTelegramChatIdsRaw);
+    }
+
+    await settings.save();
+    notifyAdminUpdate(req, { source: 'backup-settings-update' });
+    return res.json(getSanitizedSettings(settings));
   } catch (error) {
     return next(error);
   }
@@ -385,6 +473,55 @@ const getDomainActivityLogs = async (req, res, next) => {
   }
 };
 
+const runBackupNow = async (req, res, next) => {
+  try {
+    const scheduler = req.app.locals.backupScheduler;
+    if (!scheduler) {
+      return res.status(500).json({ error: 'Backup scheduler unavailable' });
+    }
+
+    await scheduler.runNowDetached({ triggeredBy: req.user?._id || null });
+    notifyAdminUpdate(req, { source: 'backup-run-now' });
+    return res.status(202).json({ ok: true, started: true, backupSchedulerStatus: scheduler.getStatus() });
+  } catch (error) {
+    if (error.statusCode) {
+      return res.status(error.statusCode).json({ error: error.message });
+    }
+    return next(error);
+  }
+};
+
+const testBackupTelegram = async (req, res, next) => {
+  try {
+    const settings = await ensureSettings();
+    const telegramBotToken = getTelegramTokenFromSettings(
+      {
+        backupTelegramBotToken: req.body?.backupTelegramBotToken ?? settings.backupTelegramBotToken,
+      },
+      process.env.TELEGRAM_BOT_TOKEN || ''
+    );
+    const inputChatIds =
+      req.body?.backupTelegramChatIds !== undefined ? req.body.backupTelegramChatIds : settings.backupTelegramChatIds;
+    const normalizedChatIds = normalizeChatIds(inputChatIds);
+
+    const result = await testTelegramTargets({
+      telegramBotToken,
+      chatIds: normalizedChatIds,
+      text: req.body?.message,
+    });
+
+    return res.json({
+      ok: result.failCount === 0,
+      ...result,
+    });
+  } catch (error) {
+    if (error.statusCode) {
+      return res.status(error.statusCode).json({ error: error.message });
+    }
+    return next(error);
+  }
+};
+
 const getAutoCheckLogs = async (req, res, next) => {
   try {
     const limit = getLogLimit(req.query.limit);
@@ -412,11 +549,14 @@ const getAutoCheckLogs = async (req, res, next) => {
 module.exports = {
   getAdminSettings,
   updateSchedule,
+  updateBackupSettings,
   addApiKey,
   updateApiKey,
   deleteApiKey,
   getAdminDashboard,
   runAutoNow,
+  runBackupNow,
+  testBackupTelegram,
   stopAutoRun,
   getDomainActivityLogs,
   getAutoCheckLogs,

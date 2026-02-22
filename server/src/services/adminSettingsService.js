@@ -1,5 +1,13 @@
 const AdminSettings = require('../models/AdminSettings');
 const { hoursToMinutes, minutesToHours, normalizeAllowedIntervalMinutes } = require('./scheduleTimeService');
+const {
+  parseWibTime,
+  normalizeChatIds,
+  VALID_BACKUP_FORMATS,
+  VALID_BACKUP_FREQUENCIES,
+  getBackupIntervalDays,
+  getTimeframeDaysForFrequency,
+} = require('./backupService');
 
 const DEFAULT_INTERVAL_HOURS = 1;
 
@@ -41,6 +49,55 @@ const ensureSettings = async ({ envKeys = [] } = {}) => {
 
   if (!settings.serpApiKeys?.length && envKeys.length) {
     settings.serpApiKeys = envKeys;
+    shouldSave = true;
+  }
+
+  if (!VALID_BACKUP_FREQUENCIES.includes(settings.backupFrequency)) {
+    settings.backupFrequency = 'daily';
+    shouldSave = true;
+  }
+
+  const mappedEveryDays = getBackupIntervalDays(settings.backupFrequency);
+  if (!Number.isFinite(settings.backupEveryDays) || settings.backupEveryDays !== mappedEveryDays) {
+    settings.backupEveryDays = mappedEveryDays;
+    shouldSave = true;
+  }
+
+  const twiceWeeklyGap = settings.backupTwiceWeeklyNextGapDays === 4 ? 4 : 3;
+  if (settings.backupTwiceWeeklyNextGapDays !== twiceWeeklyGap) {
+    settings.backupTwiceWeeklyNextGapDays = twiceWeeklyGap;
+    shouldSave = true;
+  }
+
+  const parsedWibTime = parseWibTime(settings.backupTimeWib || '');
+  if (!parsedWibTime) {
+    settings.backupTimeWib = '00:00';
+    shouldSave = true;
+  } else if (settings.backupTimeWib !== parsedWibTime.normalized) {
+    settings.backupTimeWib = parsedWibTime.normalized;
+    shouldSave = true;
+  }
+
+  const expectedTimeframeDays = getTimeframeDaysForFrequency(settings);
+  if (!Number.isFinite(Number(settings.backupTimeframeDays)) || Number(settings.backupTimeframeDays) !== expectedTimeframeDays) {
+    settings.backupTimeframeDays = expectedTimeframeDays;
+    shouldSave = true;
+  }
+
+  if (!VALID_BACKUP_FORMATS.includes(settings.backupFormat)) {
+    settings.backupFormat = 'json';
+    shouldSave = true;
+  }
+
+  const normalizedBotToken = String(settings.backupTelegramBotToken || '').trim();
+  if (settings.backupTelegramBotToken !== normalizedBotToken) {
+    settings.backupTelegramBotToken = normalizedBotToken;
+    shouldSave = true;
+  }
+
+  const normalizedChatIds = normalizeChatIds(settings.backupTelegramChatIds);
+  if (JSON.stringify(normalizedChatIds) !== JSON.stringify(settings.backupTelegramChatIds || [])) {
+    settings.backupTelegramChatIds = normalizedChatIds;
     shouldSave = true;
   }
 
@@ -87,6 +144,24 @@ const getSanitizedSettings = (settings) => {
     lastAutoCheckAt: settings.lastAutoCheckAt,
     nextAutoCheckAt: settings.nextAutoCheckAt,
     autoCheckStartedBy: settings.autoCheckStartedBy || null,
+    backupEnabled: settings.backupEnabled || false,
+    backupFrequency: VALID_BACKUP_FREQUENCIES.includes(settings.backupFrequency)
+      ? settings.backupFrequency
+      : 'daily',
+    backupEveryDays: Number(settings.backupEveryDays) || 1,
+    backupTimeWib: settings.backupTimeWib || '00:00',
+    backupTimeframeDays: getTimeframeDaysForFrequency(settings),
+    backupFormat: settings.backupFormat || 'json',
+    backupTelegramBotTokenConfigured: Boolean(String(settings.backupTelegramBotToken || '').trim()),
+    backupTelegramBotTokenMasked: String(settings.backupTelegramBotToken || '').trim()
+      ? `***${String(settings.backupTelegramBotToken || '').trim().slice(-6)}`
+      : '',
+    backupTelegramChatIds: normalizeChatIds(settings.backupTelegramChatIds),
+    backupStartedBy: settings.backupStartedBy || null,
+    lastBackupAt: settings.lastBackupAt || null,
+    nextBackupAt: settings.nextBackupAt || null,
+    lastBackupStatus: settings.lastBackupStatus || 'idle',
+    lastBackupError: settings.lastBackupError || '',
     serpApiKeys: (settings.serpApiKeys || []).map((item) => ({
       _id: item._id,
       name: item.name,

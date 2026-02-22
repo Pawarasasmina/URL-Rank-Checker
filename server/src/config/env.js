@@ -25,5 +25,6 @@ module.exports = {
   initialAdminEmail: process.env.INITIAL_ADMIN_EMAIL || 'admin@200m.website',
   initialAdminUsername: process.env.INITIAL_ADMIN_USERNAME || 'Admin',
   initialAdminPassword: process.env.INITIAL_ADMIN_PASSWORD || 'admin@1234',
+  telegramBotToken: process.env.TELEGRAM_BOT_TOKEN || '',
   port: Number(process.env.PORT) || 4000,
 };

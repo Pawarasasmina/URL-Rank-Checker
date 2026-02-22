@@ -1,5 +1,20 @@
 import { useEffect, useState } from 'react';
 
+const INDONESIA_TIME_ZONE = 'Asia/Jakarta';
+const formatDateTimeWib = (value) => {
+  if (!value) return '-';
+  return new Date(value).toLocaleString('id-ID', {
+    timeZone: INDONESIA_TIME_ZONE,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false,
+  });
+};
+
 function UserManagementPanel({ onLoadUsers, onCreateUser, onUpdateUser, onDeleteUser }) {
   const [users, setUsers] = useState([]);
   const [error, setError] = useState('');
@@ -243,7 +258,7 @@ function UserManagementPanel({ onLoadUsers, onCreateUser, onUpdateUser, onDelete
                           '-'
                         )}
                       </td>
-                      <td className="px-3 py-2">{new Date(user.createdAt).toLocaleString()}</td>
+                      <td className="px-3 py-2">{formatDateTimeWib(user.createdAt)}</td>
                       <td className="px-3 py-2">
                         <div className="flex gap-2">
                           {isEditing ? (

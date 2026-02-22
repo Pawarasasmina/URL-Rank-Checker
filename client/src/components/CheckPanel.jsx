@@ -1,4 +1,20 @@
-﻿import { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
+
+const INDONESIA_TIME_ZONE = 'Asia/Jakarta';
+const formatDateTimeWib = (value) => {
+  if (!value) return '-';
+  return new Date(value).toLocaleString('id-ID', {
+    timeZone: INDONESIA_TIME_ZONE,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false,
+  });
+};
+
 
 const COUNTRIES = [
   { code: 'id', label: 'Indonesia' },
@@ -140,7 +156,7 @@ function CheckPanel({ selectedBrand, onCheck, loading, error, resultEntry }) {
 
         {resultEntry?.checkedAt && (
           <p className="mt-3 text-xs text-slate-500">
-            Last checked at: {new Date(resultEntry.checkedAt).toLocaleString()}
+            Last checked at: {formatDateTimeWib(resultEntry.checkedAt)}
             {resultEntry.cached ? ' (cached)' : ''}
             {resultEntry.params?.gl ? ` | region: ${resultEntry.params.gl.toUpperCase()}` : ''}
             {resultEntry.params?.device ? ` | device: ${resultEntry.params.device}` : ''}

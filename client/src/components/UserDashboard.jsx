@@ -1,6 +1,21 @@
 import { useEffect, useMemo, useState } from 'react';
 import { BRAND_MAP } from '../constants/brandMap';
 
+const INDONESIA_TIME_ZONE = 'Asia/Jakarta';
+const formatDateTimeWib = (value) => {
+  if (!value) return '-';
+  return new Date(value).toLocaleString('id-ID', {
+    timeZone: INDONESIA_TIME_ZONE,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false,
+  });
+};
+
 function StatCard({ emoji, value, label, color = '#f59e0b' }) {
   return (
     <div className="flex flex-col gap-2 rounded-2xl border border-slate-100 bg-white p-5 shadow-sm">
@@ -13,7 +28,12 @@ function StatCard({ emoji, value, label, color = '#f59e0b' }) {
 
 const formatRunTime = (value) => {
   if (!value) return '-';
-  return new Date(value).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  return new Date(value).toLocaleTimeString('id-ID', {
+    timeZone: INDONESIA_TIME_ZONE,
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  });
 };
 
 // ── Modal ────────────────────────────────────────────────────────────────────
@@ -55,9 +75,7 @@ function RunModal({ selected, onClose }) {
                 {brand.code}
               </span>
             </div>
-            <p className="mt-0.5 text-xs text-slate-400">
-              {new Date(run.checkedAt).toLocaleString()}
-            </p>
+            <p className="mt-0.5 text-xs text-slate-400">{formatDateTimeWib(run.checkedAt)}</p>
           </div>
           <button
             onClick={onClose}
