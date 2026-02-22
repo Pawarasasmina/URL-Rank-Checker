@@ -2,9 +2,11 @@ import { useEffect, useMemo, useState } from 'react';
 import { BRAND_MAP } from '../constants/brandMap';
 
 const INDONESIA_TIME_ZONE = 'Asia/Jakarta';
-const formatTimeWib = (value) =>
-  new Date(value).toLocaleTimeString('id-ID', {
+const formatAxisDateTimeWib = (value) =>
+  new Date(value).toLocaleString('id-ID', {
     timeZone: INDONESIA_TIME_ZONE,
+    day: '2-digit',
+    month: '2-digit',
     hour: '2-digit',
     minute: '2-digit',
     hour12: false,
@@ -129,7 +131,7 @@ function PolylineChart({ series, height = 280, valueKey = 'rank' }) {
         {allTimestamps.map((ts, i) => {
           if (i % labelEvery !== 0) return null;
           const x = xForIndex(i);
-          const label = formatTimeWib(ts);
+          const label = formatAxisDateTimeWib(ts);
           return (
             <text
               key={ts}
@@ -207,7 +209,7 @@ function PolylineChart({ series, height = 280, valueKey = 'rank' }) {
                       x={tipX + tipWidth / 2} y={cy - 12}
                       textAnchor="middle" fill="#f8fafc" fontSize="11" fontWeight="600"
                     >
-                      {s.label} #{rank} · {formatTimeWib(ts)}
+                      {s.label} #{rank} · {formatAxisDateTimeWib(ts)}
                     </text>
                   </g>
                 )}
