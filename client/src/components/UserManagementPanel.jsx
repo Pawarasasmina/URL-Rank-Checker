@@ -146,6 +146,7 @@ function UserManagementPanel({ onLoadUsers, onCreateUser, onUpdateUser, onDelete
               className="rounded-md border border-slate-300 px-3 py-2 text-sm"
             >
               <option value="user">User</option>
+              <option value="manager">Manager</option>
               <option value="admin">Admin</option>
             </select>
             <input
@@ -225,6 +226,7 @@ function UserManagementPanel({ onLoadUsers, onCreateUser, onUpdateUser, onDelete
                             className="rounded border border-slate-300 px-2 py-1 text-sm"
                           >
                             <option value="user">User</option>
+                            <option value="manager">Manager</option>
                             <option value="admin">Admin</option>
                           </select>
                         ) : (

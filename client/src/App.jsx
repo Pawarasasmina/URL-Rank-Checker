@@ -100,9 +100,12 @@ function App() {
   }, []);
 
   const isAdmin = currentUser?.role === 'admin';
+  const isManager = currentUser?.role === 'manager';
+  const canAccessAdminConfig = isAdmin || isManager;
+  const canManageUsers = isAdmin;
 
   const tabs = useMemo(() => {
-    if (!isAdmin) {
+    if (!canAccessAdminConfig) {
       return [
         { id: 'dashboard', label: 'Dashboard' },
         { id: 'checker', label: 'Manual Checker' },
@@ -111,17 +114,20 @@ function App() {
       ];
     }
 
-    return [
+    const adminTabs = [
       { id: 'dashboard', label: 'Dashboard' },
       { id: 'checker', label: 'Manual Checker' },
       { id: 'domains', label: 'Brands & Analytics' },
       { id: 'admin', label: 'Admin Config' },
       { id: 'domain-logs', label: 'Domain Logs' },
       { id: 'auto-check-logs', label: 'Auto Check Logs' },
-      { id: 'users', label: 'User Management' },
       { id: 'profile', label: 'My Profile' },
     ];
-  }, [isAdmin]);
+    if (canManageUsers) {
+      adminTabs.splice(6, 0, { id: 'users', label: 'User Management' });
+    }
+    return adminTabs;
+  }, [canAccessAdminConfig, canManageUsers]);
 
   useEffect(() => {
     if (!authReady || !currentUser) return;
@@ -223,7 +229,7 @@ function App() {
   };
 
   const refreshAdminDashboard = async ({ showLoader = true } = {}) => {
-    if (!isAdmin) return;
+    if (!canAccessAdminConfig) return;
     if (showLoader) setAdminLoading(true);
     setAdminError('');
     setAdminNotice('');
@@ -242,10 +248,10 @@ function App() {
     if (tab === 'admin') {
       refreshAdminDashboard({ showLoader: true });
     }
-  }, [tab, isAdmin]);
+  }, [tab, canAccessAdminConfig]);
 
   useEffect(() => {
-    if (!isAdmin || tab !== 'admin' || !socketUrl) return undefined;
+    if (!canAccessAdminConfig || tab !== 'admin' || !socketUrl) return undefined;
 
     const socket = io(socketUrl, { transports: ['websocket', 'polling'] });
 
@@ -259,7 +265,7 @@ function App() {
       socket.off('admin:dashboard-updated', onDashboardUpdated);
       socket.disconnect();
     };
-  }, [tab, socketUrl, isAdmin]);
+  }, [tab, socketUrl, canAccessAdminConfig]);
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -534,7 +540,7 @@ function App() {
           />
         )}
 
-        {isAdmin && tab === 'admin' && (
+        {canAccessAdminConfig && tab === 'admin' && (
           <AdminPanel
             dashboard={adminDashboard}
             loading={adminLoading}
@@ -556,7 +562,7 @@ function App() {
           />
         )}
 
-        {isAdmin && tab === 'users' && (
+        {canManageUsers && tab === 'users' && (
           <UserManagementPanel
             onLoadUsers={getUsers}
             onCreateUser={createUser}
@@ -565,11 +571,11 @@ function App() {
           />
         )}
 
-        {isAdmin && tab === 'domain-logs' && (
+        {canAccessAdminConfig && tab === 'domain-logs' && (
           <DomainActivityLogPanel onLoadLogs={getDomainActivityLogs} />
         )}
 
-        {isAdmin && tab === 'auto-check-logs' && (
+        {canAccessAdminConfig && tab === 'auto-check-logs' && (
           <AutoCheckLogPanel onLoadLogs={getAutoCheckLogs} />
         )}
 

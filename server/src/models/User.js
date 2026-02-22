@@ -3,6 +3,7 @@ const bcrypt = require('bcryptjs');
 
 const USER_ROLES = {
   ADMIN: 'admin',
+  MANAGER: 'manager',
   USER: 'user',
 };
 
