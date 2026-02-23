@@ -35,12 +35,14 @@ import {
   stopAutoRun,
   updateAdminApiKey,
   updateAdminBackupSettings,
+  updateAdminNotificationSettings,
   updateAdminSchedule,
   updateUser,
   updateMyPassword,
   updateMyProfile,
   runBackupNow,
   testAdminBackupTelegram,
+  testAdminNotificationTelegram,
 } from './services/api';
 
 function App() {
@@ -74,6 +76,7 @@ function App() {
   const [autoRunActionLoading, setAutoRunActionLoading] = useState(false);
   const [backupActionLoading, setBackupActionLoading] = useState(false);
   const [backupTestLoading, setBackupTestLoading] = useState(false);
+  const [notificationTestLoading, setNotificationTestLoading] = useState(false);
   const [wibClock, setWibClock] = useState(getWibClock());
 
   // Dashboard enriched brands state
@@ -356,6 +359,16 @@ function App() {
     }
   };
 
+  const saveNotificationSettings = async (payload) => {
+    try {
+      setAdminNotice('');
+      await updateAdminNotificationSettings(payload);
+      await refreshAdminDashboard();
+    } catch (err) {
+      setAdminError(err.message || 'Failed to update notification settings');
+    }
+  };
+
   const triggerBackupNow = async () => {
     setBackupActionLoading(true);
     try {
@@ -382,6 +395,28 @@ function App() {
       setAdminError(err.message || 'Failed to test Telegram bot/chat IDs');
     } finally {
       setBackupTestLoading(false);
+    }
+  };
+
+  const triggerTestNotificationTelegram = async ({ notificationTelegramChatIds, notificationTelegramBotToken }) => {
+    setNotificationTestLoading(true);
+    try {
+      setAdminError('');
+      const payload = {
+        notificationTelegramChatIds,
+      };
+      if (String(notificationTelegramBotToken || '').trim()) {
+        payload.notificationTelegramBotToken = String(notificationTelegramBotToken).trim();
+      }
+      const result = await testAdminNotificationTelegram(payload);
+      setAdminNotice(
+        `Notification test: ${result.okCount}/${result.total} successful${result.failCount ? `, ${result.failCount} failed` : ''}.`
+      );
+      await refreshAdminDashboard({ showLoader: false });
+    } catch (err) {
+      setAdminError(err.message || 'Failed to test notification Telegram settings');
+    } finally {
+      setNotificationTestLoading(false);
     }
   };
 
@@ -555,6 +590,17 @@ function App() {
                       >
                         Backup Config
                       </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setTab('admin');
+                          setAdminConfigView('notifications');
+                          setAdminMenuOpen(false);
+                        }}
+                        className="block w-full rounded-md px-3 py-2 text-left text-xs font-semibold text-slate-700 hover:bg-slate-100"
+                      >
+                        Notifications Config
+                      </button>
                     </div>
                   </div>
                 );
@@ -662,10 +708,13 @@ function App() {
             onStopRun={triggerStopAutoRun}
             runActionLoading={autoRunActionLoading}
             onSaveBackupSettings={saveBackupSettings}
+            onSaveNotificationSettings={saveNotificationSettings}
             onRunBackupNow={triggerBackupNow}
             backupActionLoading={backupActionLoading}
             onTestBackupTelegram={triggerTestBackupTelegram}
             backupTestLoading={backupTestLoading}
+            onTestNotificationTelegram={triggerTestNotificationTelegram}
+            notificationTestLoading={notificationTestLoading}
             sectionView={adminConfigView}
           />
         )}

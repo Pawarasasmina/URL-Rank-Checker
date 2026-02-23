@@ -10,6 +10,7 @@ const { createKeyRotationService } = require('./services/keyRotationService');
 const { createSerpRunService } = require('./services/serpRunService');
 const { createAutoCheckScheduler } = require('./services/autoCheckScheduler');
 const { createBackupScheduler } = require('./services/backupScheduler');
+const { createNotificationService } = require('./services/notificationService');
 const { ensureInitialAdmin } = require('./services/userBootstrapService');
 
 const bootstrap = async () => {
@@ -30,6 +31,7 @@ const bootstrap = async () => {
   const cache = new InMemoryCache();
   const keyRotationService = createKeyRotationService();
   const serpRunService = createSerpRunService({ cache, keyRotationService });
+  const notificationService = createNotificationService({ telegramBotToken: env.telegramBotToken });
   const serpController = createSerpController({ serpRunService });
 
   const app = createApp({
@@ -55,6 +57,7 @@ const bootstrap = async () => {
 
   const scheduler = createAutoCheckScheduler({
     serpRunService,
+    notificationService,
     onStatusChange: () => emitAdminUpdate({ source: 'scheduler' }),
   });
   app.locals.autoCheckScheduler = scheduler;

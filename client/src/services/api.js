@@ -133,6 +133,12 @@ export const updateAdminBackupSettings = (payload) =>
     body: JSON.stringify(payload),
   });
 
+export const updateAdminNotificationSettings = (payload) =>
+  request('/api/admin/settings/notifications', {
+    method: 'PATCH',
+    body: JSON.stringify(payload),
+  });
+
 export const addAdminApiKey = (payload) =>
   request('/api/admin/settings/keys', {
     method: 'POST',
@@ -167,6 +173,12 @@ export const runBackupNow = () =>
 
 export const testAdminBackupTelegram = (payload) =>
   request('/api/admin/backup/test-telegram', {
+    method: 'POST',
+    body: JSON.stringify(payload || {}),
+  });
+
+export const testAdminNotificationTelegram = (payload) =>
+  request('/api/admin/notifications/test-telegram', {
     method: 'POST',
     body: JSON.stringify(payload || {}),
   });
