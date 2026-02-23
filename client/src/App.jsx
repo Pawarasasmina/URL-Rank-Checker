@@ -414,7 +414,7 @@ function App() {
         <div className="space-y-3">
           <div className="flex items-center justify-between gap-2">
             <div className="flex items-center gap-2 rounded-xl border border-rose-100 bg-gradient-to-r from-white to-rose-50 px-3 py-1.5 shadow-sm">
-              <span className="inline-flex h-8 w-8 items-center justify-center rounded-full ring-1 ring-rose-100">
+              <span className="inline-flex h-8 w-8 items-center justify-center rounded-full ">
                 <Flag code="ID" height="20" />
               </span>
               <p className="font-mono text-base font-bold text-rose-600 sm:text-lg">{wibClock.time}</p>
