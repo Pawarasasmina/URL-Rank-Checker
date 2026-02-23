@@ -11,6 +11,7 @@ import DomainManagementPanel from './components/DomainManagementPanel';
 import DomainActivityLogPanel from './components/DomainActivityLogPanel';
 import AutoCheckLogPanel from './components/AutoCheckLogPanel';
 import UserDashboard from './components/UserDashboard';
+import Flag from 'react-world-flags';
 import {
   addAdminApiKey,
   checkTopTen,
@@ -483,12 +484,12 @@ function App() {
               })}
             </div>
             <div className="flex items-center gap-2">
-              <div className="flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-1.5">
-                <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-blue-100 text-[10px] font-bold text-blue-700">
-                  WIB
+              <div className="flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-200 px-3 py-1.5">
+                <span className="inline-flex h-8 w-8 items-center justify-center rounded-full text-[10px] font-bold text-red-600">
+                  <Flag code="ID" height="20" />
                 </span>
                 <div className="leading-tight">
-                  <p className="font-mono text-sm font-bold text-slate-900">{wibClock.time}</p>
+                  <p className="font-sans text-2xl font-bold text-red-600">{wibClock.time}</p>
                 </div>
               </div>
               <span className="text-xs text-slate-600">
