@@ -434,7 +434,7 @@ function UserDashboard({ username = 'User', brands = [], totalDomains = 0, focus
       {/* Header */}
       <div className="flex items-center justify-between rounded-2xl border border-slate-100 bg-white px-6 py-5 shadow-sm">
         <div>
-          <h1 className="text-xl font-bold text-slate-800">Welcomeeeeeeee back, {username}!</h1>
+          <h1 className="text-xl font-bold text-slate-800">Welcome back, {username}!</h1>
           <p className="mt-0.5 text-sm text-slate-500">Here is what is happening with your brands today.</p>
         </div>
         <span className="rounded-full bg-slate-100 px-3 py-1.5 text-sm font-semibold text-slate-600">{username}</span>

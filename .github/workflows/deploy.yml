@@ -17,19 +17,23 @@ jobs:
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.VPS_SSH_KEY }}
           script: |
+            set -e
             cd /root/url-rank-checker
 
-            echo "Pulling latest code..."
-            git pull origin main
+            echo "Syncing latest code from origin/main..."
+            git fetch origin main
+            git reset --hard origin/main
+            git clean -fd
+            echo "Deployed commit: $(git rev-parse --short HEAD)"
 
             echo "Installing backend dependencies..."
             cd server
-            npm install
+            npm ci
             pm2 restart apirankchecker
 
             echo "Installing frontend dependencies..."
             cd ../client
-            npm install
+            npm ci
             npm run build
             pm2 restart clientrankchecker
 
