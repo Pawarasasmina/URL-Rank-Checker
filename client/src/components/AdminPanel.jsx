@@ -205,6 +205,9 @@ function AdminPanel({
   const tokenRows = dashboard?.tokens || [];
   const schedulerStatus = dashboard?.schedulerStatus;
   const serperRuntime = dashboard?.serperRuntime || null;
+  const runningKey = serperRuntime?.rotationKey || null;
+  const runningKeyId = runningKey?._id || '';
+  const runningKeyName = String(runningKey?.name || '').trim().toLowerCase();
   const autoState = getAutoState(settings, schedulerStatus);
   const progress = schedulerStatus?.progress || { processedBrands: 0, totalBrands: 0, brandCode: null };
   const selectedIntervalValue = String(getIntervalMinutes(settings));
@@ -663,18 +666,40 @@ function AdminPanel({
                   const maskedKey =
                     (settings?.serpApiKeys || []).find((key) => key._id === item._id)?.maskedKey || '***';
                   const isEditing = editingKeyId === item._id;
+                  const itemName = String(item.name || '').trim().toLowerCase();
+                  const isRunningKey = Boolean(
+                    (runningKeyId && item._id === runningKeyId) ||
+                    (runningKeyName && itemName && itemName === runningKeyName)
+                  );
 
                   return (
-                    <tr key={item._id}>
+                    <tr
+                      key={item._id}
+                      className={isRunningKey ? 'bg-violet-50/80 ring-1 ring-inset ring-violet-200' : ''}
+                    >
                       <td className="px-3 py-2">
                         {isEditing ? (
-                          <input
-                            value={editingKeyName}
-                            onChange={(e) => setEditingKeyName(e.target.value)}
-                            className="w-full rounded-md border border-slate-300 px-2 py-1 text-xs"
-                          />
+                          <div className="flex items-center gap-2">
+                            <input
+                              value={editingKeyName}
+                              onChange={(e) => setEditingKeyName(e.target.value)}
+                              className="w-full rounded-md border border-slate-300 px-2 py-1 text-xs"
+                            />
+                            {isRunningKey && (
+                              <span className="shrink-0 rounded-full bg-violet-600 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white">
+                                Running
+                              </span>
+                            )}
+                          </div>
                         ) : (
-                          item.name
+                          <div className="flex items-center gap-2">
+                            <span>{item.name}</span>
+                            {isRunningKey && (
+                              <span className="rounded-full bg-violet-600 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white">
+                                Running
+                              </span>
+                            )}
+                          </div>
                         )}
                       </td>
                       <td className="px-3 py-2 font-mono text-xs">
