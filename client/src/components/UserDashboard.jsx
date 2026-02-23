@@ -441,7 +441,7 @@ function UserDashboard({ username = 'User', brands = [], totalDomains = 0, focus
       </div>
 
       {/* Stat cards */}
-      <div className="grid grid-cols-2 gap-4 lg:grid-cols-5">
+      <div className="hidden gap-4 md:grid md:grid-cols-2 lg:grid-cols-5">
         <StatCard emoji="🏷️" value={totalBrands} label="Total Brands" color="#f59e0b" />
         <StatCard emoji="🌐" value={totalDomains} label="Total Domains" color="#6366f1" />
         <StatCard emoji="🔍" value={searchedToday} label="Searched Today" color="#f59e0b" />

@@ -71,7 +71,7 @@ function AddDomainForm({ selectedBrand, onCreateDomain, onRefresh }) {
         <button
           type="submit"
           disabled={submitting || !selectedBrand}
-          className="rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-60"
+          className="w-full rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-60 lg:w-auto"
         >
           {submitting ? 'Adding...' : 'Add Domain'}
         </button>
@@ -245,10 +245,10 @@ function DomainManagementPanel({
       {error && <p className="rounded bg-red-50 p-2 text-sm text-red-700">{error}</p>}
 
       {selectedBrand ? (
-        <div className="flex gap-4 min-h-[70vh]">
+        <div className="flex min-h-[70vh] flex-col gap-4 lg:flex-row">
 
           {/* ── Domain vertical list ── */}
-          <div className="w-72 shrink-0 rounded-lg border border-slate-200 bg-white p-3 shadow-sm">
+          <div className="w-full shrink-0 rounded-lg border border-slate-200 bg-white p-3 shadow-sm lg:w-72">
             <div className="mb-2 flex items-center gap-2 flex-wrap">
               <button
                 type="button"
@@ -316,7 +316,7 @@ function DomainManagementPanel({
                 {loading ? 'Loading…' : 'No domains yet.'}
               </p>
             ) : (
-              <div className="space-y-1 overflow-y-auto max-h-[calc(100vh-320px)]">
+              <div className="max-h-64 space-y-1 overflow-y-auto lg:max-h-[calc(100vh-320px)]">
                 {brandDomains.map((item) => {
                   const isSelected = viewIsDomain && view?._id === item._id;
                   const isChecked = checkedIds.includes(item._id);
@@ -352,16 +352,16 @@ function DomainManagementPanel({
           </div>
 
           {/* ── Right panel: analytics or compare ── */}
-          <div className="flex-1 min-w-0">
+          <div className="min-w-0 flex-1">
             {showAnalytics && (
               <div className="rounded-lg border border-indigo-200 bg-white shadow-sm overflow-hidden h-full">
-                <div className="flex items-center gap-2 border-b border-indigo-100 bg-indigo-50 px-4 py-3">
-                  <div className="flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 shadow-sm">
+                <div className="flex flex-wrap items-center gap-2 border-b border-indigo-100 bg-indigo-50 px-3 py-3 lg:px-4">
+                  <div className="flex min-w-0 items-center gap-2 rounded-lg bg-indigo-600 px-3 py-2 shadow-sm lg:px-4">
                     <span className="text-xs font-semibold uppercase tracking-wider text-indigo-200">
                       {viewIsBrand ? 'Brand Analytics' : 'Domain Analytics'}
                     </span>
                     <span className="h-4 w-px bg-indigo-400" />
-                    <span className="text-base font-bold text-white">{analyticsLabel}</span>
+                    <span className="truncate text-sm font-bold text-white lg:text-base">{analyticsLabel}</span>
                   </div>
                   {viewIsDomain && (
                     <a
@@ -370,7 +370,7 @@ function DomainManagementPanel({
                       rel="noreferrer"
                       title="Go to Page"
                       aria-label="Go to Page"
-                      className="inline-flex h-6 w-6 items-center justify-center rounded bg-emerald-100 text-emerald-700 hover:bg-emerald-200"
+                      className="inline-flex h-7 w-7 items-center justify-center rounded bg-emerald-100 text-emerald-700 hover:bg-emerald-200"
                     >
                       <svg
                         viewBox="0 0 24 24"
@@ -390,12 +390,12 @@ function DomainManagementPanel({
                       </svg>
                     </a>
                   )}
-                  <div className="ml-auto flex items-center gap-2">
+                  <div className="ml-auto flex w-full flex-wrap items-center justify-end gap-2 sm:w-auto">
                     {viewIsDomain && isAdmin && (
                       <button
                         type="button"
                         onClick={() => remove(view._id)}
-                        className="rounded bg-red-100 px-2 py-0.5 text-xs font-medium text-red-700 hover:bg-red-200"
+                        className="rounded bg-red-100 px-2 py-1 text-xs font-medium text-red-700 hover:bg-red-200"
                       >
                         Delete Domain
                       </button>
@@ -403,7 +403,7 @@ function DomainManagementPanel({
                     <button
                       type="button"
                       onClick={() => setView(null)}
-                      className="rounded bg-indigo-100 px-2 py-0.5 text-xs text-indigo-700 hover:bg-indigo-200"
+                      className="rounded bg-indigo-100 px-2 py-1 text-xs text-indigo-700 hover:bg-indigo-200"
                     >
                       Close
                     </button>
@@ -419,20 +419,20 @@ function DomainManagementPanel({
 
             {viewIsCompare && (
               <div className="rounded-lg border border-slate-200 bg-white shadow-sm overflow-hidden">
-                <div className="flex items-center gap-2 border-b border-slate-200 bg-blue-50 px-4 py-3">
-                  <div className="flex items-center gap-2 rounded-lg bg-black px-4 py-2 shadow-sm">
+                <div className="flex flex-wrap items-center gap-2 border-b border-slate-200 bg-blue-50 px-3 py-3 lg:px-4">
+                  <div className="flex min-w-0 items-center gap-2 rounded-lg bg-black px-3 py-2 shadow-sm lg:px-4">
                     <span className="text-xs font-semibold uppercase tracking-wider text-amber-100">
                       {compareMode === 'brand' ? 'Brand Compare' : 'Domain Compare'}
                     </span>
                     <span className="h-4 w-px bg-amber-300" />
-                    <span className="text-base font-bold text-white">
+                    <span className="truncate text-sm font-bold text-white lg:text-base">
                       {compareMode === 'brand' ? selectedBrand.code : `${checkedDomains.length} Domains`}
                     </span>
                   </div>
                   <button
                     type="button"
                     onClick={() => { setView('brand'); setCheckedIds([]); }}
-                    className="ml-auto rounded bg-red-100 px-2 py-0.5 text-xs text-red-700 hover:bg-red-200"
+                    className="ml-auto rounded bg-red-100 px-2 py-1 text-xs text-red-700 hover:bg-red-200"
                   >
                     Close
                   </button>
