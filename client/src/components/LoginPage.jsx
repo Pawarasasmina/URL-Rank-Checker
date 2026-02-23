@@ -4,8 +4,10 @@ function LoginPage({ onLogin }) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const [passwordFocused, setPasswordFocused] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const showPasswordGif = passwordFocused && password.length > 0;
 
   const submit = async (e) => {
     e.preventDefault();
@@ -35,6 +37,20 @@ function LoginPage({ onLogin }) {
               <p className="mt-3 max-w-sm text-sm text-slate-300">
                 Sign in to run checks, track analytics, and manage automation in one place.
               </p>
+
+              <div
+                className={`mt-4 h-[110px] overflow-hidden rounded-xl transition-colors duration-200 ${
+                  showPasswordGif ? 'border border-white/10 bg-white/5' : 'border border-transparent bg-transparent'
+                }`}
+              >
+                <img
+                  src="https://media4.giphy.com/media/v1.Y2lkPTc5MGI3NjExOHI3aWt1OHpkaW03NzZvOTR1c2VreHZkNjBlYWNkeTYzc2pwcjM3biZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/WRuBiZKB6xgsS9DrFA/giphy.gif"
+                  alt="See no evil monkey"
+                  className={`h-full w-full object-cover transition-opacity duration-200 ${
+                    showPasswordGif ? 'opacity-100' : 'opacity-0'
+                  }`}
+                />
+              </div>
             </div>
             <p className="text-xs text-slate-400">Secure access for Admin, Manager, and User roles.</p>
           </div>
@@ -64,6 +80,8 @@ function LoginPage({ onLogin }) {
                     required
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
+                    onFocus={() => setPasswordFocused(true)}
+                    onBlur={() => setPasswordFocused(false)}
                     placeholder="Enter your password"
                     className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 pr-10 text-sm shadow-sm transition focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-100"
                   />
