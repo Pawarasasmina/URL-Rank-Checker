@@ -11,26 +11,31 @@ jobs:
 
     steps:
       - name: Deploy via SSH
-        uses: appleboy/ssh-action@v0.1.10
+        uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.VPS_HOST }}
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.VPS_SSH_KEY }}
           script: |
+            set -e
+
             cd /root/url-rank-checker
 
-            echo "Pulling latest code..."
+            echo ">>> Pulling latest code..."
             git pull origin main
 
-            echo "Installing backend dependencies..."
+            echo ">>> Installing backend dependencies..."
             cd server
-            npm install
-            pm2 restart apirankchecker
+            npm install --omit=dev
+            pm2 restart apirankchecker || pm2 start npm --name apirankchecker -- start
 
-            echo "Installing frontend dependencies..."
+            echo ">>> Installing frontend dependencies & building..."
             cd ../client
-            npm install
+            npm install --omit=dev
             npm run build
-            pm2 restart clientrankchecker
+            pm2 restart clientrankchecker || pm2 start npm --name clientrankchecker -- start
 
-            echo "Deployment complete!"
+            echo ">>> Saving PM2 process list..."
+            pm2 save
+
+            echo "✅ Deployment complete!"
