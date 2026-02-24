@@ -416,6 +416,7 @@ module.exports = {
   getTimeframeDaysForFrequency,
   getNextBackupAtFromNow,
   getNextBackupAtFromScheduled,
+  sendTelegramText,
   testTelegramTargets,
   runTelegramBackup,
   logFailedBackupRun,

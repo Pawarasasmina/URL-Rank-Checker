@@ -4,7 +4,7 @@ const { hoursToMinutes, getNextScheduledAt } = require('./scheduleTimeService');
 
 const POLL_INTERVAL_MS = 30 * 1000;
 
-const createAutoCheckScheduler = ({ serpRunService, onStatusChange = () => {} }) => {
+const createAutoCheckScheduler = ({ serpRunService, notificationService = null, onStatusChange = () => {} }) => {
   let timer = null;
   let isRunning = false;
   let stopRequested = false;
@@ -147,6 +147,13 @@ const createAutoCheckScheduler = ({ serpRunService, onStatusChange = () => {} })
 
       settings.lastAutoCheckAt = new Date();
       settings.nextAutoCheckAt = computeNextRunAt(settings.checkIntervalHours || 1, scheduledAt);
+      if (notificationService?.processAutoCheckRun) {
+        try {
+          await notificationService.processAutoCheckRun({ settings, outcomes, now: new Date() });
+        } catch (notifyError) {
+          console.error('Auto-check notification send failed:', notifyError.message);
+        }
+      }
       await settings.save();
     } catch (error) {
       console.error('Auto-check scheduler tick failed:', error.message);
@@ -194,6 +201,13 @@ const createAutoCheckScheduler = ({ serpRunService, onStatusChange = () => {} })
       settings.nextAutoCheckAt = settings.autoCheckEnabled
         ? computeNextRunAt(settings.checkIntervalHours || 1, result.startedAt || lastRunStartedAt || new Date())
         : null;
+      if (notificationService?.processAutoCheckRun) {
+        try {
+          await notificationService.processAutoCheckRun({ settings, outcomes: result.outcomes, now: new Date() });
+        } catch (notifyError) {
+          console.error('Manual auto-check notification send failed:', notifyError.message);
+        }
+      }
       await settings.save();
     }
 

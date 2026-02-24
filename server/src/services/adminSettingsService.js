@@ -101,6 +101,43 @@ const ensureSettings = async ({ envKeys = [] } = {}) => {
     shouldSave = true;
   }
 
+  const normalizedNotificationToken = String(settings.notificationTelegramBotToken || '').trim();
+  if (settings.notificationTelegramBotToken !== normalizedNotificationToken) {
+    settings.notificationTelegramBotToken = normalizedNotificationToken;
+    shouldSave = true;
+  }
+
+  const normalizedNotificationChatIds = normalizeChatIds(settings.notificationTelegramChatIds);
+  if (JSON.stringify(normalizedNotificationChatIds) !== JSON.stringify(settings.notificationTelegramChatIds || [])) {
+    settings.notificationTelegramChatIds = normalizedNotificationChatIds;
+    shouldSave = true;
+  }
+
+  const normalizedHourlyMinute = Number.isFinite(Number(settings.notificationHourlySendAtMinute))
+    ? Math.max(0, Math.min(59, Math.floor(Number(settings.notificationHourlySendAtMinute))))
+    : 0;
+  if (Number(settings.notificationHourlySendAtMinute) !== normalizedHourlyMinute) {
+    settings.notificationHourlySendAtMinute = normalizedHourlyMinute;
+    shouldSave = true;
+  }
+
+  const normalizedDropThreshold = Number.isFinite(Number(settings.notificationInstantDropThreshold))
+    ? Math.max(1, Math.min(10, Math.floor(Number(settings.notificationInstantDropThreshold))))
+    : 3;
+  if (Number(settings.notificationInstantDropThreshold) !== normalizedDropThreshold) {
+    settings.notificationInstantDropThreshold = normalizedDropThreshold;
+    shouldSave = true;
+  }
+
+  const parsedDigestTime = parseWibTime(settings.notificationDailyDigestTimeWib || '');
+  if (!parsedDigestTime) {
+    settings.notificationDailyDigestTimeWib = '23:00';
+    shouldSave = true;
+  } else if (settings.notificationDailyDigestTimeWib !== parsedDigestTime.normalized) {
+    settings.notificationDailyDigestTimeWib = parsedDigestTime.normalized;
+    shouldSave = true;
+  }
+
   if (shouldSave) {
     await settings.save();
   }
@@ -157,6 +194,26 @@ const getSanitizedSettings = (settings) => {
       ? `***${String(settings.backupTelegramBotToken || '').trim().slice(-6)}`
       : '',
     backupTelegramChatIds: normalizeChatIds(settings.backupTelegramChatIds),
+    notificationsEnabled: settings.notificationsEnabled || false,
+    notificationHourlyEnabled: settings.notificationHourlyEnabled !== false,
+    notificationHourlySendAtMinute: Number.isFinite(Number(settings.notificationHourlySendAtMinute))
+      ? Math.max(0, Math.min(59, Math.floor(Number(settings.notificationHourlySendAtMinute))))
+      : 0,
+    notificationInstantEnabled: settings.notificationInstantEnabled !== false,
+    notificationInstantDropThreshold: Number.isFinite(Number(settings.notificationInstantDropThreshold))
+      ? Math.max(1, Math.min(10, Math.floor(Number(settings.notificationInstantDropThreshold))))
+      : 3,
+    notificationAlertOnDrop: settings.notificationAlertOnDrop !== false,
+    notificationAlertOnNotFound: settings.notificationAlertOnNotFound !== false,
+    notificationDailyDigestEnabled: settings.notificationDailyDigestEnabled !== false,
+    notificationDailyDigestTimeWib: parseWibTime(settings.notificationDailyDigestTimeWib || '')?.normalized || '23:00',
+    notificationTelegramBotTokenConfigured: Boolean(String(settings.notificationTelegramBotToken || '').trim()),
+    notificationTelegramBotTokenMasked: String(settings.notificationTelegramBotToken || '').trim()
+      ? `***${String(settings.notificationTelegramBotToken || '').trim().slice(-6)}`
+      : '',
+    notificationTelegramChatIds: normalizeChatIds(settings.notificationTelegramChatIds),
+    notificationLastHourlySlotKey: String(settings.notificationLastHourlySlotKey || ''),
+    notificationLastDailyDigestDateKey: String(settings.notificationLastDailyDigestDateKey || ''),
     backupStartedBy: settings.backupStartedBy || null,
     lastBackupAt: settings.lastBackupAt || null,
     nextBackupAt: settings.nextBackupAt || null,

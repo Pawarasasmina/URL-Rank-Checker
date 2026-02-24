@@ -195,10 +195,13 @@ function AdminPanel({
   onDeleteKey,
   runActionLoading,
   onSaveBackupSettings,
+  onSaveNotificationSettings,
   onRunBackupNow,
   backupActionLoading,
   onTestBackupTelegram,
   backupTestLoading,
+  onTestNotificationTelegram,
+  notificationTestLoading,
   sectionView = 'all',
 }) {
   const settings = dashboard?.settings;
@@ -221,6 +224,21 @@ function AdminPanel({
   const [backupChatIdsText, setBackupChatIdsText] = useState('');
   const [backupBotTokenInput, setBackupBotTokenInput] = useState('');
   const [isEditingBotToken, setIsEditingBotToken] = useState(false);
+  const [notificationChatIdsText, setNotificationChatIdsText] = useState('');
+  const [notificationBotTokenInput, setNotificationBotTokenInput] = useState('');
+  const [isEditingNotificationBotToken, setIsEditingNotificationBotToken] = useState(false);
+  const [clearNotificationBotToken, setClearNotificationBotToken] = useState(false);
+  const [notificationSaving, setNotificationSaving] = useState(false);
+  const [notificationForm, setNotificationForm] = useState({
+    notificationsEnabled: false,
+    notificationHourlyEnabled: true,
+    notificationInstantEnabled: true,
+    notificationInstantDropThreshold: 3,
+    notificationAlertOnDrop: true,
+    notificationAlertOnNotFound: true,
+    notificationDailyDigestEnabled: true,
+    notificationDailyDigestTimeWib: '23:00',
+  });
 
   
   const backupSchedulerStatus = dashboard?.backupSchedulerStatus;
@@ -232,14 +250,74 @@ function AdminPanel({
   const backupFormat = settings?.backupFormat || 'json';
   const backupBotTokenConfigured = !!settings?.backupTelegramBotTokenConfigured;
   const backupBotTokenMasked = settings?.backupTelegramBotTokenMasked || '';
+  const notificationsEnabled = !!settings?.notificationsEnabled;
+  const notificationHourlyEnabled = settings?.notificationHourlyEnabled !== false;
+  const notificationInstantEnabled = settings?.notificationInstantEnabled !== false;
+  const notificationInstantDropThreshold = Number.isFinite(Number(settings?.notificationInstantDropThreshold))
+    ? Math.max(1, Math.min(10, Math.floor(Number(settings.notificationInstantDropThreshold))))
+    : 3;
+  const notificationAlertOnDrop = settings?.notificationAlertOnDrop !== false;
+  const notificationAlertOnNotFound = settings?.notificationAlertOnNotFound !== false;
+  const notificationDailyDigestEnabled = settings?.notificationDailyDigestEnabled !== false;
+  const notificationDailyDigestTimeWib = settings?.notificationDailyDigestTimeWib || '23:00';
+  const notificationBotTokenConfigured = !!settings?.notificationTelegramBotTokenConfigured;
+  const notificationBotTokenMasked = settings?.notificationTelegramBotTokenMasked || '';
   const showRankSection = sectionView === 'all' || sectionView === 'rank-check';
   const showBackupSection = sectionView === 'all' || sectionView === 'backup';
+  const showNotificationSection = sectionView === 'all' || sectionView === 'notifications';
   const showApiSection = sectionView === 'all' || sectionView === 'rank-check';
 
   const currentChatIds = (settings?.backupTelegramChatIds || []).join(', ');
+  const currentNotificationChatIds = (settings?.notificationTelegramChatIds || []).join(', ');
   useEffect(() => {
     setBackupChatIdsText(currentChatIds);
   }, [currentChatIds]);
+  useEffect(() => {
+    setNotificationChatIdsText(currentNotificationChatIds);
+  }, [currentNotificationChatIds]);
+  useEffect(() => {
+    setNotificationForm({
+      notificationsEnabled,
+      notificationHourlyEnabled,
+      notificationInstantEnabled,
+      notificationInstantDropThreshold,
+      notificationAlertOnDrop,
+      notificationAlertOnNotFound,
+      notificationDailyDigestEnabled,
+      notificationDailyDigestTimeWib,
+    });
+    setClearNotificationBotToken(false);
+  }, [
+    notificationsEnabled,
+    notificationHourlyEnabled,
+    notificationInstantEnabled,
+    notificationInstantDropThreshold,
+    notificationAlertOnDrop,
+    notificationAlertOnNotFound,
+    notificationDailyDigestEnabled,
+    notificationDailyDigestTimeWib,
+  ]);
+
+  const saveNotificationChanges = async () => {
+    setNotificationSaving(true);
+    try {
+      const payload = {
+        ...notificationForm,
+        notificationTelegramChatIds: notificationChatIdsText,
+      };
+      if (clearNotificationBotToken) {
+        payload.notificationTelegramBotToken = '';
+      } else if (String(notificationBotTokenInput || '').trim()) {
+        payload.notificationTelegramBotToken = String(notificationBotTokenInput).trim();
+      }
+      await onSaveNotificationSettings(payload);
+      setNotificationBotTokenInput('');
+      setIsEditingNotificationBotToken(false);
+      setClearNotificationBotToken(false);
+    } finally {
+      setNotificationSaving(false);
+    }
+  };
 
   return (
     <section className="p-4 lg:p-6">
@@ -595,6 +673,232 @@ function AdminPanel({
             </table>
             {backupRuns.length === 0 && <p className="mt-2 text-xs text-slate-500">No backup runs yet.</p>}
           </div>
+        </div>
+        )}
+
+        {showNotificationSection && (
+        <div className="rounded-2xl border border-amber-200 bg-gradient-to-br from-amber-50 via-white to-orange-50 p-5 shadow-sm">
+          <div className="flex items-center justify-between gap-3">
+            <h2 className="text-lg font-semibold text-slate-900">Telegram Notifications</h2>
+            <span className="rounded-full bg-amber-100 px-3 py-1 text-[11px] font-semibold uppercase tracking-wide text-amber-700">
+              Alerts
+            </span>
+          </div>
+          <p className="mt-1 text-xs text-slate-500">
+            Configure instant alerts, hourly batch, and daily digest for auto-check runs (WIB).
+          </p>
+
+          {settings && (
+            <div className="mt-4 space-y-4">
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() =>
+                    setNotificationForm((prev) => ({
+                      ...prev,
+                      notificationsEnabled: !prev.notificationsEnabled,
+                    }))
+                  }
+                  className={`rounded-xl px-4 py-2.5 text-sm font-semibold text-white shadow-sm ${
+                    notificationForm.notificationsEnabled
+                      ? 'bg-rose-600 hover:bg-rose-700'
+                      : 'bg-emerald-600 hover:bg-emerald-700'
+                  }`}
+                >
+                  {notificationForm.notificationsEnabled ? 'Disable Notifications' : 'Enable Notifications'}
+                </button>
+              </div>
+
+              <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-4">
+                <label className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={notificationForm.notificationInstantEnabled}
+                    onChange={(e) =>
+                      setNotificationForm((prev) => ({
+                        ...prev,
+                        notificationInstantEnabled: e.target.checked,
+                      }))
+                    }
+                  />
+                  <span>Instant alerts</span>
+                </label>
+                <label className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={notificationForm.notificationHourlyEnabled}
+                    onChange={(e) =>
+                      setNotificationForm((prev) => ({
+                        ...prev,
+                        notificationHourlyEnabled: e.target.checked,
+                      }))
+                    }
+                  />
+                  <span>Hourly summary</span>
+                </label>
+                <label className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={notificationForm.notificationDailyDigestEnabled}
+                    onChange={(e) =>
+                      setNotificationForm((prev) => ({
+                        ...prev,
+                        notificationDailyDigestEnabled: e.target.checked,
+                      }))
+                    }
+                  />
+                  <span>Daily digest</span>
+                </label>
+                <label className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={notificationForm.notificationAlertOnNotFound}
+                    onChange={(e) =>
+                      setNotificationForm((prev) => ({
+                        ...prev,
+                        notificationAlertOnNotFound: e.target.checked,
+                      }))
+                    }
+                  />
+                  <span>Alert on not found</span>
+                </label>
+                <label className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={notificationForm.notificationAlertOnDrop}
+                    onChange={(e) =>
+                      setNotificationForm((prev) => ({
+                        ...prev,
+                        notificationAlertOnDrop: e.target.checked,
+                      }))
+                    }
+                  />
+                  <span>Alert on rank drop</span>
+                </label>
+              </div>
+
+              <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-2">
+                <div>
+                  <label className="block text-xs font-semibold uppercase tracking-wide text-slate-600">
+                    Instant drop threshold
+                  </label>
+                  <input
+                    type="number"
+                    min="1"
+                    max="10"
+                    value={notificationForm.notificationInstantDropThreshold}
+                    onChange={(e) =>
+                      setNotificationForm((prev) => ({
+                        ...prev,
+                        notificationInstantDropThreshold: Number(e.target.value),
+                      }))
+                    }
+                    className="mt-1 w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm shadow-sm"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold uppercase tracking-wide text-slate-600">
+                    Daily digest time (WIB)
+                  </label>
+                  <input
+                    type="time"
+                    value={notificationForm.notificationDailyDigestTimeWib}
+                    onChange={(e) =>
+                      setNotificationForm((prev) => ({
+                        ...prev,
+                        notificationDailyDigestTimeWib: e.target.value,
+                      }))
+                    }
+                    placeholder="23:00"
+                    className="mt-1 w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm shadow-sm"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold uppercase tracking-wide text-slate-600">Notification Bot Token</label>
+                <div className="mt-1 flex gap-2">
+                  <input
+                    value={notificationBotTokenInput}
+                    onChange={(e) => {
+                      setNotificationBotTokenInput(e.target.value);
+                      setClearNotificationBotToken(false);
+                    }}
+                    placeholder={notificationBotTokenConfigured ? 'Enter new token to replace existing' : '123456:ABC...'}
+                    type={isEditingNotificationBotToken ? 'text' : 'password'}
+                    className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm shadow-sm outline-none transition focus:border-amber-400 focus:ring-2 focus:ring-amber-100"
+                  />
+                </div>
+                <p className="mt-1 text-xs text-slate-500">Token changes apply after you click Update Notifications.</p>
+                {notificationBotTokenConfigured && (
+                  <div className="mt-2 flex flex-wrap items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+                    <span className="font-semibold">Saved Bot:</span>
+                    <span className="font-mono">{notificationBotTokenMasked}</span>
+                    <button
+                      type="button"
+                      onClick={() => setIsEditingNotificationBotToken(true)}
+                      className="rounded bg-white px-2 py-1 font-semibold text-slate-700 shadow-sm hover:bg-slate-50"
+                    >
+                      Edit
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setNotificationBotTokenInput('');
+                        setIsEditingNotificationBotToken(true);
+                        setClearNotificationBotToken(true);
+                      }}
+                      className="rounded bg-rose-100 px-2 py-1 font-semibold text-rose-700 hover:bg-rose-200"
+                    >
+                      Clear on Update
+                    </button>
+                  </div>
+                )}
+                {clearNotificationBotToken && (
+                  <p className="mt-1 text-xs font-semibold text-rose-700">
+                    Bot token will be removed when you click Update Notifications.
+                  </p>
+                )}
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold uppercase tracking-wide text-slate-600">
+                  Telegram Chat IDs (comma separated)
+                </label>
+                <div className="mt-1 flex gap-2">
+                  <input
+                    value={notificationChatIdsText}
+                    onChange={(e) => setNotificationChatIdsText(e.target.value)}
+                    placeholder="-1001234567890, 987654321"
+                    className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm shadow-sm"
+                  />
+                  <button
+                    type="button"
+                    onClick={() =>
+                      onTestNotificationTelegram({
+                        notificationTelegramChatIds: notificationChatIdsText,
+                        notificationTelegramBotToken: notificationBotTokenInput,
+                      })
+                    }
+                    disabled={notificationTestLoading}
+                    className="rounded-xl bg-indigo-600 px-3 py-2.5 text-xs font-semibold text-white shadow-sm hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {notificationTestLoading ? 'Testing...' : 'Test Notification'}
+                  </button>
+                </div>
+                <div className="mt-3 flex justify-end">
+                  <button
+                    type="button"
+                    onClick={saveNotificationChanges}
+                    disabled={notificationSaving}
+                    className="rounded-xl bg-amber-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-amber-700 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {notificationSaving ? 'Updating...' : 'Update Notifications'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
         )}
 

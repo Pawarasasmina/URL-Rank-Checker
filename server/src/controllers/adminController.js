@@ -422,6 +422,77 @@ const updateBackupSettings = async (req, res, next) => {
   }
 };
 
+const updateNotificationSettings = async (req, res, next) => {
+  try {
+    const settings = await ensureSettings();
+    const {
+      notificationsEnabled,
+      notificationHourlyEnabled,
+      notificationHourlySendAtMinute,
+      notificationInstantEnabled,
+      notificationInstantDropThreshold,
+      notificationAlertOnDrop,
+      notificationAlertOnNotFound,
+      notificationDailyDigestEnabled,
+      notificationDailyDigestTimeWib,
+      notificationTelegramBotToken,
+      notificationTelegramChatIds,
+    } = req.body || {};
+
+    if (typeof notificationsEnabled === 'boolean') {
+      settings.notificationsEnabled = notificationsEnabled;
+    }
+    if (typeof notificationHourlyEnabled === 'boolean') {
+      settings.notificationHourlyEnabled = notificationHourlyEnabled;
+    }
+    if (notificationHourlySendAtMinute !== undefined) {
+      const minute = Number(notificationHourlySendAtMinute);
+      if (!Number.isFinite(minute) || minute < 0 || minute > 59) {
+        return res.status(400).json({ error: 'notificationHourlySendAtMinute must be between 0 and 59' });
+      }
+      settings.notificationHourlySendAtMinute = Math.floor(minute);
+    }
+    if (typeof notificationInstantEnabled === 'boolean') {
+      settings.notificationInstantEnabled = notificationInstantEnabled;
+    }
+    if (notificationInstantDropThreshold !== undefined) {
+      const threshold = Number(notificationInstantDropThreshold);
+      if (!Number.isFinite(threshold) || threshold < 1 || threshold > 10) {
+        return res.status(400).json({ error: 'notificationInstantDropThreshold must be between 1 and 10' });
+      }
+      settings.notificationInstantDropThreshold = Math.floor(threshold);
+    }
+    if (typeof notificationAlertOnDrop === 'boolean') {
+      settings.notificationAlertOnDrop = notificationAlertOnDrop;
+    }
+    if (typeof notificationAlertOnNotFound === 'boolean') {
+      settings.notificationAlertOnNotFound = notificationAlertOnNotFound;
+    }
+    if (typeof notificationDailyDigestEnabled === 'boolean') {
+      settings.notificationDailyDigestEnabled = notificationDailyDigestEnabled;
+    }
+    if (notificationDailyDigestTimeWib !== undefined) {
+      const parsed = parseWibTime(String(notificationDailyDigestTimeWib || ''));
+      if (!parsed) {
+        return res.status(400).json({ error: 'notificationDailyDigestTimeWib must be in HH:mm format' });
+      }
+      settings.notificationDailyDigestTimeWib = parsed.normalized;
+    }
+    if (notificationTelegramBotToken !== undefined) {
+      settings.notificationTelegramBotToken = String(notificationTelegramBotToken || '').trim();
+    }
+    if (notificationTelegramChatIds !== undefined) {
+      settings.notificationTelegramChatIds = normalizeChatIds(notificationTelegramChatIds);
+    }
+
+    await settings.save();
+    notifyAdminUpdate(req, { source: 'notification-settings-update' });
+    return res.json(getSanitizedSettings(settings));
+  } catch (error) {
+    return next(error);
+  }
+};
+
 const runAutoNow = async (req, res, next) => {
   try {
     const scheduler = req.app.locals.autoCheckScheduler;
@@ -550,6 +621,42 @@ const testBackupTelegram = async (req, res, next) => {
   }
 };
 
+const testNotificationTelegram = async (req, res, next) => {
+  try {
+    const settings = await ensureSettings();
+    const inputToken = String(req.body?.notificationTelegramBotToken || '').trim();
+    const telegramBotToken = getTelegramTokenFromSettings(
+      {
+        backupTelegramBotToken: inputToken || settings.notificationTelegramBotToken,
+      },
+      process.env.TELEGRAM_BOT_TOKEN || ''
+    );
+    const inputChatIds =
+      req.body?.notificationTelegramChatIds !== undefined
+        ? req.body.notificationTelegramChatIds
+        : settings.notificationTelegramChatIds;
+    const normalizedChatIds = normalizeChatIds(inputChatIds);
+
+    const result = await testTelegramTargets({
+      telegramBotToken,
+      chatIds: normalizedChatIds,
+      text:
+        req.body?.message ||
+        `Notification test message\nTime: ${new Date().toISOString()}\nIf you can read this, notification channel is working.`,
+    });
+
+    return res.json({
+      ok: result.failCount === 0,
+      ...result,
+    });
+  } catch (error) {
+    if (error.statusCode) {
+      return res.status(error.statusCode).json({ error: error.message });
+    }
+    return next(error);
+  }
+};
+
 const getAutoCheckLogs = async (req, res, next) => {
   try {
     const limit = getLogLimit(req.query.limit);
@@ -578,6 +685,7 @@ module.exports = {
   getAdminSettings,
   updateSchedule,
   updateBackupSettings,
+  updateNotificationSettings,
   addApiKey,
   updateApiKey,
   deleteApiKey,
@@ -585,6 +693,7 @@ module.exports = {
   runAutoNow,
   runBackupNow,
   testBackupTelegram,
+  testNotificationTelegram,
   stopAutoRun,
   getDomainActivityLogs,
   getAutoCheckLogs,
