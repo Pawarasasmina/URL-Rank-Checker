@@ -1,7 +1,7 @@
 const Domain = require('../models/Domain');
 const Brand = require('../models/Brand');
 const { DomainActivityLog, DOMAIN_ACTIVITY_ACTIONS } = require('../models/DomainActivityLog');
-const { normalizeHost } = require('../utils/domain');
+const { normalizeDomain } = require('../utils/domain');
 
 const getDomains = async (req, res, next) => {
   try {
@@ -30,8 +30,8 @@ const createDomain = async (req, res, next) => {
       return res.status(400).json({ error: 'domain and brandId are required' });
     }
 
-    const normalizedHost = normalizeHost(rawDomain);
-    if (!normalizedHost) {
+    const normalizedDomain = normalizeDomain(rawDomain);
+    if (!normalizedDomain) {
       return res.status(400).json({ error: 'Invalid domain' });
     }
 
@@ -41,7 +41,7 @@ const createDomain = async (req, res, next) => {
     }
 
     const domain = await Domain.create({
-      domain: normalizedHost,
+      domain: normalizedDomain,
       brand: brand._id,
       note,
       isActive: true,

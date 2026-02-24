@@ -2,7 +2,7 @@ const psl = require('psl');
 
 const safeUrl = (input) => {
   if (!input) return null;
-  const str = String(input).trim().toLowerCase();
+  const str = String(input).trim();
   if (!str) return null;
 
   try {
@@ -24,6 +24,27 @@ const normalizeHost = (value) => {
     host = host.slice(4);
   }
   return host;
+};
+
+const normalizeDomain = (value) => {
+  const parsed = safeUrl(value);
+  if (!parsed) return '';
+
+  let host = parsed.hostname.toLowerCase();
+  if (host.startsWith('www.')) {
+    host = host.slice(4);
+  }
+
+  const port = parsed.port ? `:${parsed.port}` : '';
+  let path = parsed.pathname || '';
+  path = path.replace(/\/{2,}/g, '/');
+  if (path === '/') {
+    path = '';
+  } else if (path.endsWith('/')) {
+    path = path.slice(0, -1);
+  }
+
+  return `${host}${port}${path}`;
 };
 
 const getRootDomain = (host) => {
@@ -67,6 +88,7 @@ const extractHostFromLink = (link) => normalizeHost(link);
 
 module.exports = {
   normalizeHost,
+  normalizeDomain,
   getRootDomain,
   tokenizeValue,
   buildDomainKeys,

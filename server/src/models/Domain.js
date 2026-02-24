@@ -39,6 +39,6 @@ domainSchema.pre('validate', function deriveDomainKeys(next) {
   return next();
 });
 
-domainSchema.index({ brand: 1, domainHostKey: 1 }, { unique: true });
+domainSchema.index({ brand: 1, domain: 1 }, { unique: true });
 
 module.exports = mongoose.model('Domain', domainSchema);

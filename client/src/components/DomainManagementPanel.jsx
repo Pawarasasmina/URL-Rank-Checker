@@ -19,6 +19,12 @@ const formatBrandLabel = (brand) => {
   return `${code} - ${name}`;
 };
 
+const getDomainHostLabel = (domainItem) => {
+  if (!domainItem) return '';
+  if (domainItem.domainHostKey) return domainItem.domainHostKey;
+  return String(domainItem.domain || '').split('/')[0];
+};
+
 // ─── Add-domain form (admin only) ─────────────────────────────────────────────
 function AddDomainForm({ selectedBrand, onCreateDomain, onRefresh }) {
   const [domain, setDomain] = useState('');
@@ -110,9 +116,9 @@ function AnalyticsInline({ brand, domainItem, onGetRankingHistory }) {
   const displayData = useMemo(() => {
     if (!data) return null;
     if (!domainItem) return data;
-    const domainHost = domainItem.domain;
+    const domainHost = getDomainHostLabel(domainItem);
     const filteredTrends = (data.domainTrends || []).filter(
-      (t) => t.domain === domainHost || t.domainHostKey?.includes(domainHost)
+      (t) => t.domain === domainHost || t.domainHostKey === domainHost
     );
     return { ...data, domainTrends: filteredTrends };
   }, [data, domainItem]);
@@ -125,7 +131,7 @@ function AnalyticsInline({ brand, domainItem, onGetRankingHistory }) {
       onRangeChange={setRange}
       loading={loading}
       error={error}
-      focusedDomain={domainItem?.domain || null}
+      focusedDomain={getDomainHostLabel(domainItem) || null}
     />
   );
 }
@@ -342,7 +348,7 @@ function DomainManagementPanel({
                       <span
                         className="truncate text-sm font-medium text-indigo-700"
                       >
-                        {item.domain}
+                        {getDomainHostLabel(item)}
                       </span>
                     </div>
                   );
