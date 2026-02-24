@@ -54,6 +54,8 @@ const adminSettingsSchema = new mongoose.Schema(
     notificationLastHourlySlotKey: { type: String, default: '' },
     notificationLastRunSnapshot: { type: Map, of: Number, default: {} },
     notificationLastHourlySnapshot: { type: Map, of: Number, default: {} },
+    notificationLastSentSlotKey: { type: String, default: '' },
+    notificationLastSentSnapshotHash: { type: String, default: '' },
     notificationLastDailyDigestDateKey: { type: String, default: '' },
     activeKeyCursor: { type: Number, default: 0 },
     serpApiKeys: { type: [serpApiKeySchema], default: [] },
