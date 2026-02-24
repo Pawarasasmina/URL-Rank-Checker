@@ -227,6 +227,18 @@ function AdminPanel({
   const [notificationChatIdsText, setNotificationChatIdsText] = useState('');
   const [notificationBotTokenInput, setNotificationBotTokenInput] = useState('');
   const [isEditingNotificationBotToken, setIsEditingNotificationBotToken] = useState(false);
+  const [clearNotificationBotToken, setClearNotificationBotToken] = useState(false);
+  const [notificationSaving, setNotificationSaving] = useState(false);
+  const [notificationForm, setNotificationForm] = useState({
+    notificationsEnabled: false,
+    notificationHourlyEnabled: true,
+    notificationInstantEnabled: true,
+    notificationInstantDropThreshold: 3,
+    notificationAlertOnDrop: true,
+    notificationAlertOnNotFound: true,
+    notificationDailyDigestEnabled: true,
+    notificationDailyDigestTimeWib: '23:00',
+  });
 
   
   const backupSchedulerStatus = dashboard?.backupSchedulerStatus;
@@ -240,9 +252,6 @@ function AdminPanel({
   const backupBotTokenMasked = settings?.backupTelegramBotTokenMasked || '';
   const notificationsEnabled = !!settings?.notificationsEnabled;
   const notificationHourlyEnabled = settings?.notificationHourlyEnabled !== false;
-  const notificationHourlySendAtMinute = Number.isFinite(Number(settings?.notificationHourlySendAtMinute))
-    ? Math.max(0, Math.min(59, Math.floor(Number(settings.notificationHourlySendAtMinute))))
-    : 0;
   const notificationInstantEnabled = settings?.notificationInstantEnabled !== false;
   const notificationInstantDropThreshold = Number.isFinite(Number(settings?.notificationInstantDropThreshold))
     ? Math.max(1, Math.min(10, Math.floor(Number(settings.notificationInstantDropThreshold))))
@@ -266,6 +275,49 @@ function AdminPanel({
   useEffect(() => {
     setNotificationChatIdsText(currentNotificationChatIds);
   }, [currentNotificationChatIds]);
+  useEffect(() => {
+    setNotificationForm({
+      notificationsEnabled,
+      notificationHourlyEnabled,
+      notificationInstantEnabled,
+      notificationInstantDropThreshold,
+      notificationAlertOnDrop,
+      notificationAlertOnNotFound,
+      notificationDailyDigestEnabled,
+      notificationDailyDigestTimeWib,
+    });
+    setClearNotificationBotToken(false);
+  }, [
+    notificationsEnabled,
+    notificationHourlyEnabled,
+    notificationInstantEnabled,
+    notificationInstantDropThreshold,
+    notificationAlertOnDrop,
+    notificationAlertOnNotFound,
+    notificationDailyDigestEnabled,
+    notificationDailyDigestTimeWib,
+  ]);
+
+  const saveNotificationChanges = async () => {
+    setNotificationSaving(true);
+    try {
+      const payload = {
+        ...notificationForm,
+        notificationTelegramChatIds: notificationChatIdsText,
+      };
+      if (clearNotificationBotToken) {
+        payload.notificationTelegramBotToken = '';
+      } else if (String(notificationBotTokenInput || '').trim()) {
+        payload.notificationTelegramBotToken = String(notificationBotTokenInput).trim();
+      }
+      await onSaveNotificationSettings(payload);
+      setNotificationBotTokenInput('');
+      setIsEditingNotificationBotToken(false);
+      setClearNotificationBotToken(false);
+    } finally {
+      setNotificationSaving(false);
+    }
+  };
 
   return (
     <section className="p-4 lg:p-6">
@@ -641,12 +693,19 @@ function AdminPanel({
               <div className="flex flex-wrap items-center gap-2">
                 <button
                   type="button"
-                  onClick={() => onSaveNotificationSettings({ notificationsEnabled: !notificationsEnabled })}
+                  onClick={() =>
+                    setNotificationForm((prev) => ({
+                      ...prev,
+                      notificationsEnabled: !prev.notificationsEnabled,
+                    }))
+                  }
                   className={`rounded-xl px-4 py-2.5 text-sm font-semibold text-white shadow-sm ${
-                    notificationsEnabled ? 'bg-rose-600 hover:bg-rose-700' : 'bg-emerald-600 hover:bg-emerald-700'
+                    notificationForm.notificationsEnabled
+                      ? 'bg-rose-600 hover:bg-rose-700'
+                      : 'bg-emerald-600 hover:bg-emerald-700'
                   }`}
                 >
-                  {notificationsEnabled ? 'Disable Notifications' : 'Enable Notifications'}
+                  {notificationForm.notificationsEnabled ? 'Disable Notifications' : 'Enable Notifications'}
                 </button>
               </div>
 
@@ -654,11 +713,12 @@ function AdminPanel({
                 <label className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm">
                   <input
                     type="checkbox"
-                    checked={notificationInstantEnabled}
+                    checked={notificationForm.notificationInstantEnabled}
                     onChange={(e) =>
-                      onSaveNotificationSettings({
+                      setNotificationForm((prev) => ({
+                        ...prev,
                         notificationInstantEnabled: e.target.checked,
-                      })
+                      }))
                     }
                   />
                   <span>Instant alerts</span>
@@ -666,11 +726,12 @@ function AdminPanel({
                 <label className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm">
                   <input
                     type="checkbox"
-                    checked={notificationHourlyEnabled}
+                    checked={notificationForm.notificationHourlyEnabled}
                     onChange={(e) =>
-                      onSaveNotificationSettings({
+                      setNotificationForm((prev) => ({
+                        ...prev,
                         notificationHourlyEnabled: e.target.checked,
-                      })
+                      }))
                     }
                   />
                   <span>Hourly summary</span>
@@ -678,11 +739,12 @@ function AdminPanel({
                 <label className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm">
                   <input
                     type="checkbox"
-                    checked={notificationDailyDigestEnabled}
+                    checked={notificationForm.notificationDailyDigestEnabled}
                     onChange={(e) =>
-                      onSaveNotificationSettings({
+                      setNotificationForm((prev) => ({
+                        ...prev,
                         notificationDailyDigestEnabled: e.target.checked,
-                      })
+                      }))
                     }
                   />
                   <span>Daily digest</span>
@@ -690,11 +752,12 @@ function AdminPanel({
                 <label className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm">
                   <input
                     type="checkbox"
-                    checked={notificationAlertOnNotFound}
+                    checked={notificationForm.notificationAlertOnNotFound}
                     onChange={(e) =>
-                      onSaveNotificationSettings({
+                      setNotificationForm((prev) => ({
+                        ...prev,
                         notificationAlertOnNotFound: e.target.checked,
-                      })
+                      }))
                     }
                   />
                   <span>Alert on not found</span>
@@ -702,35 +765,19 @@ function AdminPanel({
                 <label className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm">
                   <input
                     type="checkbox"
-                    checked={notificationAlertOnDrop}
+                    checked={notificationForm.notificationAlertOnDrop}
                     onChange={(e) =>
-                      onSaveNotificationSettings({
+                      setNotificationForm((prev) => ({
+                        ...prev,
                         notificationAlertOnDrop: e.target.checked,
-                      })
+                      }))
                     }
                   />
                   <span>Alert on rank drop</span>
                 </label>
               </div>
 
-              <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
-                <div>
-                  <label className="block text-xs font-semibold uppercase tracking-wide text-slate-600">
-                    Hourly send minute (WIB)
-                  </label>
-                  <input
-                    type="number"
-                    min="0"
-                    max="59"
-                    value={notificationHourlySendAtMinute}
-                    onChange={(e) =>
-                      onSaveNotificationSettings({
-                        notificationHourlySendAtMinute: Number(e.target.value),
-                      })
-                    }
-                    className="mt-1 w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm shadow-sm"
-                  />
-                </div>
+              <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-2">
                 <div>
                   <label className="block text-xs font-semibold uppercase tracking-wide text-slate-600">
                     Instant drop threshold
@@ -739,11 +786,12 @@ function AdminPanel({
                     type="number"
                     min="1"
                     max="10"
-                    value={notificationInstantDropThreshold}
+                    value={notificationForm.notificationInstantDropThreshold}
                     onChange={(e) =>
-                      onSaveNotificationSettings({
+                      setNotificationForm((prev) => ({
+                        ...prev,
                         notificationInstantDropThreshold: Number(e.target.value),
-                      })
+                      }))
                     }
                     className="mt-1 w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm shadow-sm"
                   />
@@ -754,11 +802,12 @@ function AdminPanel({
                   </label>
                   <input
                     type="time"
-                    value={notificationDailyDigestTimeWib}
+                    value={notificationForm.notificationDailyDigestTimeWib}
                     onChange={(e) =>
-                      onSaveNotificationSettings({
+                      setNotificationForm((prev) => ({
+                        ...prev,
                         notificationDailyDigestTimeWib: e.target.value,
-                      })
+                      }))
                     }
                     placeholder="23:00"
                     className="mt-1 w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm shadow-sm"
@@ -771,23 +820,16 @@ function AdminPanel({
                 <div className="mt-1 flex gap-2">
                   <input
                     value={notificationBotTokenInput}
-                    onChange={(e) => setNotificationBotTokenInput(e.target.value)}
+                    onChange={(e) => {
+                      setNotificationBotTokenInput(e.target.value);
+                      setClearNotificationBotToken(false);
+                    }}
                     placeholder={notificationBotTokenConfigured ? 'Enter new token to replace existing' : '123456:ABC...'}
                     type={isEditingNotificationBotToken ? 'text' : 'password'}
                     className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm shadow-sm outline-none transition focus:border-amber-400 focus:ring-2 focus:ring-amber-100"
                   />
-                  <button
-                    type="button"
-                    onClick={() => {
-                      onSaveNotificationSettings({ notificationTelegramBotToken: notificationBotTokenInput });
-                      setNotificationBotTokenInput('');
-                      setIsEditingNotificationBotToken(false);
-                    }}
-                    className="rounded-xl bg-slate-900 px-3 py-2.5 text-xs font-semibold text-white shadow-sm hover:bg-slate-800"
-                  >
-                    Save Bot
-                  </button>
                 </div>
+                <p className="mt-1 text-xs text-slate-500">Token changes apply after you click Update Notifications.</p>
                 {notificationBotTokenConfigured && (
                   <div className="mt-2 flex flex-wrap items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
                     <span className="font-semibold">Saved Bot:</span>
@@ -802,15 +844,20 @@ function AdminPanel({
                     <button
                       type="button"
                       onClick={() => {
-                        onSaveNotificationSettings({ notificationTelegramBotToken: '' });
                         setNotificationBotTokenInput('');
-                        setIsEditingNotificationBotToken(false);
+                        setIsEditingNotificationBotToken(true);
+                        setClearNotificationBotToken(true);
                       }}
                       className="rounded bg-rose-100 px-2 py-1 font-semibold text-rose-700 hover:bg-rose-200"
                     >
-                      Delete
+                      Clear on Update
                     </button>
                   </div>
+                )}
+                {clearNotificationBotToken && (
+                  <p className="mt-1 text-xs font-semibold text-rose-700">
+                    Bot token will be removed when you click Update Notifications.
+                  </p>
                 )}
               </div>
 
@@ -828,15 +875,6 @@ function AdminPanel({
                   <button
                     type="button"
                     onClick={() =>
-                      onSaveNotificationSettings({ notificationTelegramChatIds: notificationChatIdsText })
-                    }
-                    className="rounded-xl bg-slate-900 px-3 py-2.5 text-xs font-semibold text-white shadow-sm hover:bg-slate-800"
-                  >
-                    Save IDs
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() =>
                       onTestNotificationTelegram({
                         notificationTelegramChatIds: notificationChatIdsText,
                         notificationTelegramBotToken: notificationBotTokenInput,
@@ -846,6 +884,16 @@ function AdminPanel({
                     className="rounded-xl bg-indigo-600 px-3 py-2.5 text-xs font-semibold text-white shadow-sm hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-60"
                   >
                     {notificationTestLoading ? 'Testing...' : 'Test Notification'}
+                  </button>
+                </div>
+                <div className="mt-3 flex justify-end">
+                  <button
+                    type="button"
+                    onClick={saveNotificationChanges}
+                    disabled={notificationSaving}
+                    className="rounded-xl bg-amber-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-amber-700 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {notificationSaving ? 'Updating...' : 'Update Notifications'}
                   </button>
                 </div>
               </div>

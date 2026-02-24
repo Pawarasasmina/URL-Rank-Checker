@@ -52,6 +52,8 @@ const adminSettingsSchema = new mongoose.Schema(
     notificationTelegramBotToken: { type: String, default: '' },
     notificationTelegramChatIds: { type: [String], default: [] },
     notificationLastHourlySlotKey: { type: String, default: '' },
+    notificationLastRunSnapshot: { type: Map, of: Number, default: {} },
+    notificationLastHourlySnapshot: { type: Map, of: Number, default: {} },
     notificationLastDailyDigestDateKey: { type: String, default: '' },
     activeKeyCursor: { type: Number, default: 0 },
     serpApiKeys: { type: [serpApiKeySchema], default: [] },

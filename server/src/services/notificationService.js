@@ -96,8 +96,92 @@ const summarizeChanges = ({ comparisons, latestByBrandCode }) => {
 
 const shortList = (items, fallback = '-') => (items.length ? items.slice(0, 8).join(', ') : fallback);
 
+const formatRank = (rank) => (rank === null ? 'NF' : `#${rank}`);
+
+const buildBrandDetailLines = (comparisons) => {
+  const sorted = [...comparisons].sort((a, b) => String(a.brandCode || '').localeCompare(String(b.brandCode || '')));
+  return sorted.map((item) => {
+    const previousRank = item.previousRank;
+    const currentRank = item.currentRank;
+    const brandCode = item.brandCode || '-';
+
+    if (previousRank === null && currentRank === null) {
+      return `- ${brandCode}: NF`;
+    }
+    if (previousRank === null && currentRank !== null) {
+      return `- ${brandCode}: NEW ${formatRank(currentRank)}`;
+    }
+    if (previousRank !== null && currentRank === null) {
+      return `- ${brandCode}: ${formatRank(previousRank)} -> NF (out)`;
+    }
+    if (previousRank === currentRank) {
+      return `- ${brandCode}: ${formatRank(currentRank)} (=)`;
+    }
+    if (currentRank < previousRank) {
+      return `- ${brandCode}: ${formatRank(previousRank)} -> ${formatRank(currentRank)} (▲${previousRank - currentRank})`;
+    }
+    return `- ${brandCode}: ${formatRank(previousRank)} -> ${formatRank(currentRank)} (▼${currentRank - previousRank})`;
+  });
+};
+
+const getSnapshotRank = (snapshot, brandCode) => {
+  if (!snapshot || !brandCode) return null;
+  if (snapshot instanceof Map) {
+    const value = snapshot.get(brandCode);
+    return Number.isFinite(value) ? value : null;
+  }
+  const value = snapshot[brandCode];
+  return Number.isFinite(value) ? value : null;
+};
+
+const buildHourlySnapshot = (activeBrands, latestByBrandCode) => {
+  const snapshot = {};
+  activeBrands.forEach((brand) => {
+    const brandCode = String(brand.code || '').trim().toUpperCase();
+    if (!brandCode) return;
+    const latest = latestByBrandCode.get(brandCode);
+    snapshot[brandCode] = Number.isFinite(latest?.bestOwnRank) ? latest.bestOwnRank : -1;
+  });
+  return snapshot;
+};
+
+const hasSnapshotChanges = (previousSnapshot, currentSnapshot) => {
+  const allBrandCodes = new Set([
+    ...Object.keys(previousSnapshot || {}),
+    ...Object.keys(currentSnapshot || {}),
+  ]);
+  for (const brandCode of allBrandCodes) {
+    const prev = getSnapshotRank(previousSnapshot, brandCode);
+    const curr = getSnapshotRank(currentSnapshot, brandCode);
+    if ((prev ?? -1) !== (curr ?? -1)) return true;
+  }
+  return false;
+};
+
+const buildComparisonsFromSnapshot = ({
+  activeBrands,
+  latestByBrandCode,
+  previousSnapshot,
+  previousByBrandCode,
+}) =>
+  activeBrands.map((brand) => {
+    const brandCode = String(brand.code || '').trim().toUpperCase();
+    const latest = latestByBrandCode.get(brandCode) || null;
+    const previousSnapshotRank = getSnapshotRank(previousSnapshot, brandCode);
+    return {
+      brandCode,
+      query: latest?.query || brandCode,
+      primaryDomain: latest?.primaryDomain || '',
+      currentRank: latest ? latest.bestOwnRank : null,
+      previousRank: previousSnapshotRank !== null
+        ? (previousSnapshotRank < 0 ? null : previousSnapshotRank)
+        : (previousByBrandCode.get(brandCode)?.bestOwnRank ?? null),
+    };
+  });
+
 const buildHourlyMessage = ({ comparisons, latestByBrandCode, now }) => {
   const s = summarizeChanges({ comparisons, latestByBrandCode });
+  const detailLines = buildBrandDetailLines(comparisons);
   const lines = [
     `⏱️ Hourly Check — ${getWibClock(now)}`,
     '━━━━━━━━━━━━━━━━',
@@ -110,6 +194,9 @@ const buildHourlyMessage = ({ comparisons, latestByBrandCode, now }) => {
     '',
     `🏆 Leading: ${s.leading ? `${s.leading.brandCode} ${s.leading.ownCount || 0}/10 (${s.leading.bestOwnRank ? `#${s.leading.bestOwnRank}` : 'No rank'})` : '-'}`,
     `⚠️ Worst: ${s.worst ? `${s.worst.brandCode} ${s.worst.ownCount || 0}/10` : '-'}`,
+    '',
+    `📋 Brand Details (${detailLines.length})`,
+    ...detailLines,
     '━━━━━━━━━━━━━━━━',
   ];
 
@@ -318,13 +405,26 @@ const createNotificationService = ({ telegramBotToken = '' } = {}) => {
     }
 
     if (settings.notificationHourlyEnabled) {
-      const minuteGate = clamp(settings.notificationHourlySendAtMinute, 0, 59, 0);
       const slotKey = getWibHourSlotKey(now);
-      if (wibParts.minute >= minuteGate && settings.notificationLastHourlySlotKey !== slotKey) {
-        const hourlyMessage = buildHourlyMessage({ comparisons, latestByBrandCode, now });
+      const previousRunSnapshot = settings.notificationLastRunSnapshot || {};
+      const currentSnapshot = buildHourlySnapshot(activeBrands, latestByBrandCode);
+      const hasChanges = hasSnapshotChanges(previousRunSnapshot, currentSnapshot);
+      const isNewHour = settings.notificationLastHourlySlotKey !== slotKey;
+      const shouldSend = hasChanges || isNewHour;
+
+      if (shouldSend) {
+        const snapshotComparisons = buildComparisonsFromSnapshot({
+          activeBrands,
+          latestByBrandCode,
+          previousSnapshot: previousRunSnapshot,
+          previousByBrandCode,
+        });
+        const hourlyMessage = buildHourlyMessage({ comparisons: snapshotComparisons, latestByBrandCode, now });
         await sendTextToTargets({ token, chatIds, text: hourlyMessage });
         settings.notificationLastHourlySlotKey = slotKey;
+        settings.notificationLastHourlySnapshot = currentSnapshot;
       }
+      settings.notificationLastRunSnapshot = currentSnapshot;
     }
 
     if (settings.notificationDailyDigestEnabled) {
@@ -359,4 +459,3 @@ const createNotificationService = ({ telegramBotToken = '' } = {}) => {
 module.exports = {
   createNotificationService,
 };
-

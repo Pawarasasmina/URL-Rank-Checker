@@ -201,6 +201,13 @@ const createAutoCheckScheduler = ({ serpRunService, notificationService = null, 
       settings.nextAutoCheckAt = settings.autoCheckEnabled
         ? computeNextRunAt(settings.checkIntervalHours || 1, result.startedAt || lastRunStartedAt || new Date())
         : null;
+      if (notificationService?.processAutoCheckRun) {
+        try {
+          await notificationService.processAutoCheckRun({ settings, outcomes: result.outcomes, now: new Date() });
+        } catch (notifyError) {
+          console.error('Manual auto-check notification send failed:', notifyError.message);
+        }
+      }
       await settings.save();
     }
 
